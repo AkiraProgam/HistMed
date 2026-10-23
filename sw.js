@@ -1,4 +1,4 @@
-const CACHE_NAME = 'saude-familia-v1';
+const CACHE_NAME = 'saude-familia-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
