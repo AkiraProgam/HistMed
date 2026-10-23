@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Saúde da família">
+<title>Saúde da família</title>
+
+<!-- Vínculo com o Web App Manifest -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon-192.svg">
+<link rel="apple-touch-icon" href="icon-192.svg">
+
+<style>
+:root {
+  --bg: #f5f5f2;
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b6b66;
+  --line: #d9d9d3;
+  --ac: #0f766e;
+  --ac-soft: #e6f4f1;
+  --bad: #c2410c;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111210;
+    --card: #1c1d1b;
+    --text: #f1f1ec;
+    --muted: #a0a09a;
+    --line: #34352f;
+    --ac: #2dd4bf;
+    --ac-soft: #132e2b;
+    --bad: #ff7a3d;
+    --warn: #f59e0b;
+    --warn-bg: #261c0c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111210;
+  --card: #1c1d1b;
+  --text: #f1f1ec;
+  --muted: #a0a09a;
+  --line: #34352f;
+  --ac: #2dd4bf;
+  --ac-soft: #132e2b;
+  --bad: #ff7a3d;
+  --warn: #f59e0b;
+  --warn-bg: #261c0c;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+main {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 14px;
+}
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+h1 { font-size: 20px; margin: 4px 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.ic {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 12px;
+  font-size: 20px;
+  padding: 6px 10px;
+}
+.chips-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.chip-item {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 4px 2px 12px;
+}
+.chip-item.on {
+  background: var(--ac);
+  border-color: var(--ac);
+  color: #fff;
+}
+.chip-btn {
+  background: none;
+  border: 0;
+  font-weight: 600;
+  padding: 6px 4px;
+  color: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.chip-mv {
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.7;
+  padding: 4px 3px;
+  font-size: 11px;
+}
+.chip-mv:disabled { opacity: 0.2; }
+.chip-add {
+  border: 1px dashed var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.empty {
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.head b { font-size: 22px; }
+.obs {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.link {
+  border: 0;
+  background: none;
+  color: var(--ac);
+  font-weight: 600;
+  padding: 4px;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 12px 0;
+}
+.tabs button {
+  padding: 10px 4px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.tabs button.on {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+.pri {
+  background: var(--ac);
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  padding: 13px;
+  font-weight: 700;
+  font-size: 16px;
+  width: 100%;
+}
+.sec {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 16px;
+  width: 100%;
+}
+.del {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: none;
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 15px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+.card b { font-size: 17px; }
+.card .s { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.card .doc { color: var(--ac); font-size: 13px; margin-top: 4px; font-weight: 500; }
+.card.off { opacity: .55; }
+h3 {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 16px 0 0;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+input, textarea, select {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 4px;
+}
+.q { margin-top: 10px; }
+
+/* Posicionamento do Autocompletar */
+.input-wrap {
+  position: relative;
+}
+.sug {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.sug button {
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  padding: 11px;
+  font-size: 15px;
+  font-weight: 400;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sug button:last-child { border-bottom: 0; }
+.sug button .custom-tag {
+  font-size: 11px;
+  background: var(--ac-soft);
+  color: var(--ac);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.pres { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pres button {
+  border: 1px solid var(--ac);
+  background: none;
+  color: var(--ac);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.crow { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.mv { display: flex; flex-direction: column; gap: 4px; }
+.mv button {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 8px;
+  width: 36px;
+  height: 30px;
+  font-size: 13px;
+  padding: 0;
+}
+.mv button:disabled { opacity: .3; }
+pre {
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin: 0 0 10px;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  overflow: auto;
+  z-index: 20;
+  padding: calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);
+}
+.sheet {
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px;
+}
+.sheet h2 { margin: 0 0 6px; font-size: 19px; }
+.sheet label { display: block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.err { color: var(--bad); font-size: 14px; min-height: 18px; margin-top: 6px; }
+.note { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 10px; }
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom,0px) + 20px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  z-index: 30;
+}
+
+/* Alerta de Lembrete de Backup */
+.backup-alert {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text);
+}
+.backup-alert button {
+  background: var(--warn);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Estilo do Gráfico SVG */
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-top: 14px;
+}
+.chart-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.chart-svg {
+  width: 100%;
+  height: 160px;
+  overflow: visible;
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>🩺 Saúde da família</h1>
+    <button class="ic" id="cfg" aria-label="Backup e ajustes">⚙️</button>
+  </div>
+  
+  <div id="backupAlert"></div>
+  
+  <div class="chips-wrap">
+    <div class="chips" id="chips"></div>
+    <button class="chip-add" id="addFamBtn">+ Familiar</button>
+  </div>
+  
+  <div id="panel"></div>
+  <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
+</main>
+
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+  var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
+  var db=load();
+
+  function $(i){return document.getElementById(i);}
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+  
+  function load(){
+    try{
+      var s=localStorage.getItem(KEY);
+      if(s){
+        var o=JSON.parse(s);
+        if(o&&o.m&&o.d&&o.x) {
+          if(!o.customMeds) o.customMeds = [];
+          return o;
+        }
+      }
+    }catch(e){}
+    return {m:[], d:[], x:[], sel:null, customMeds:[], lastBackup: Date.now()};
+  }
+
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){}
+  }
+
+  function p2(n){return n<10?'0'+n:''+n;}
+  function today(){var d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+  function fd(i){return i?i.split('-').reverse().join('/'):'';}
+  function cur(){return db.m.filter(function(m){return m.id===db.sel;})[0]||null;}
+  
+  function toast(t){
+    var e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(tt);
+    tt=setTimeout(function(){e.hidden=true;},2200);
+  }
+  
+  function closeM(){$('modal').hidden=true;document.body.style.overflow='';}
+  
+  function copy(t){
+    function fb(){
+      var a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';
+      document.body.appendChild(a);a.select();
+      try{document.execCommand('copy');toast('Copiado');}catch(e){toast('Não foi possível copiar');}
+      document.body.removeChild(a);
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(function(){toast('Copiado');},fb);
+    }else fb();
+  }
+
+  function form(title,fields,vals,onSave,onDel,delTxt,hook){
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','',title));
+    var ins={};
+    fields.forEach(function(f){
+      var l=el('label','',f.l+(f.req?' *':'')),i;
+      if(f.t==='area'){i=el('textarea');i.rows=3;}
+      else if(f.t==='sel'){i=el('select');f.o.forEach(function(o){var op=el('option','',o[1]);op.value=o[0];i.appendChild(op);});}
+      else{i=el('input');i.type=f.t||'text';}
+      if(f.p)i.placeholder=f.p;
+      i.value=(vals&&vals[f.k]!=null)?vals[f.k]:(f.d||'');
+      ins[f.k]=i;l.appendChild(i);s.appendChild(l);
+    });
+    if(hook)hook(ins);
+    var err=el('div','err');s.appendChild(err);
+    var row=el('div','row'),c=el('button','sec','Cancelar'),ok=el('button','pri','Salvar');
+    c.onclick=closeM;
+    ok.onclick=function(){
+      var o={};
+      for(var i=0;i<fields.length;i++){
+        var f=fields[i];
+        o[f.k]=ins[f.k].value.trim();
+        if(f.req&&!o[f.k]){err.textContent='Preencha: '+f.l;ins[f.k].focus();return;}
+      }
+      onSave(o);closeM();save();render();
+    };
+    row.appendChild(c);row.appendChild(ok);s.appendChild(row);
+    if(onDel){
+      var d=el('button','del','Excluir'),a=false;
+      d.onclick=function(){
+        if(!a){a=true;d.textContent=delTxt||'Toque de novo para excluir';return;}
+        onDel();closeM();save();render();
+      };
+      s.appendChild(d);
+    }
+    $('modal').hidden=false;document.body.style.overflow='hidden';
+  }
+
+  function editMember(m){
+    form(m?'Editar familiar':'Novo familiar',
+      [{k:'name',l:'Nome',req:1,p:'Ex.: Mãe'},{k:'o',l:'Alergias e observações importantes',t:'area',p:'Ex.: alergia a dipirona'}],
+      m,function(o){
+        if(m){m.name=o.name;m.o=o.o;}
+        else{var n={id:uid(),name:o.name,o:o.o};db.m.push(n);db.sel=n.id;tab='d';}
+      },
+      m?function(){
+        db.d=db.d.filter(function(x){return x.mid!==m.id;});
+        db.x=db.x.filter(function(x){return x.mid!==m.id;});
+        db.m=db.m.filter(function(x){return x.id!==m.id;});
+        db.sel=db.m.length?db.m[0].id:null;
+      }:null,
+      'Excluir familiar e todos os dados: toque de novo');
+  }
+
+  // Base Expandida RENAME (Atenção Básica e Especializada + Uso Frequente)
+  var MEDS_EXPANDED = [
+    'Acebrofilina=5 mg/mL xarope adulto;25 mg/5 mL xarope infantil',
+    'Acetato de dexametasona=0,1% creme',
+    'Acetato de hidrocortisona=1% creme;10 mg/g',
+    'Acetazolamida=250 mg',
+    'Acetilcisteína=20mg/mL xarope;100mg;200mg;600mg envelope',
+    'Ácido acetilsalicílico (AAS)=100 mg;500 mg',
+    'Ácido fólico=5 mg;0,2 mg/mL gotas',
+    'Ácido valpróico / Valproato de sódio=250 mg;500 mg;50 mg/mL xarope',
+    'Albendazol=400 mg;40 mg/mL suspensão',
+    'Alendronato de sódio=70 mg',
+    'Alopurinol=100 mg;300 mg',
+    'Alprazolam=0,25 mg;0,5 mg;1 mg;2 mg',
+    'Ambroxol=15 mg/5 mL infantil;30 mg/5 mL adulto',
+    'Amiodarona=200 mg',
+    'Amitriptilina=25 mg;75 mg',
+    'Amoxicilina=500 mg;250 mg/5 mL suspensão',
+    'Amoxicilina + clavulanato=500 mg + 125 mg;875 mg + 125 mg;250 mg + 62,5 mg/5 mL',
+    'Ampicilina=500 mg',
+    'Anastrozol=1 mg',
+    'Anlodipino=5 mg;10 mg',
+    'Atenolol=25 mg;50 mg;100 mg',
+    'Atorvastatina=10 mg;20 mg;40 mg;80 mg',
+    'Azitromicina=500 mg;200 mg/5 mL suspensão',
+    'Baclofeno=10 mg',
+    'Beclometasona (spray)=50 mcg;200 mcg;250 mcg',
+    'Benzilpenicilina benzatina (Benzetacil)=1.200.000 UI;600.000 UI',
+    'Betametasona (dipropionato/fosfato)=5 mg/mL + 2 mg/mL',
+    'Bequimicina / Neomicina + bacitracina=5 mg/g + 250 UI/g pomada',
+    'Biperideno=2 mg',
+    'Brimonidina (colírio)=0,2%',
+    'Brimonidina + timolol (colírio)=0,2% + 0,5%',
+    'Budesonida (spray nasal/inalação)=32 mcg;64 mcg;200 mcg;400 mcg;0,25 mg/mL',
+    'Buprenorfina=5 mg;10 mg adesivo',
+    'Bupropiona=150 mg',
+    'Buscopan / Escopolamina=10 mg;10 mg/mL gotas',
+    'Buscopan Composto / Escopolamina + dipirona=250 mg + 10 mg',
+    'Candesartana=8 mg;16 mg;32 mg',
+    'Captopril=12,5 mg;25 mg;50 mg',
+    'Carbamazepina=200 mg;400 mg;20 mg/mL suspensão',
+    'Carbonato de cálcio + vitamina D3=500 mg + 400 UI;600 mg + 400 UI',
+    'Carbonato de lítio=300 mg',
+    'Carvedilol=3,125 mg;6,25 mg;12,5 mg;25 mg',
+    'Cefalexina=500 mg;250 mg/5 mL suspensão',
+    'Ceftriaxona=500 mg;1 g injetável',
+    'Cetoconazol=200 mg;20 mg/g creme;20 mg/g shampoo',
+    'Cetoprofeno=50 mg;100 mg;20 mg/mL gotas',
+    'Cetorolaco de trometamol=10 mg sublingual;0,5% colírio',
+    'Cilostazol=50 mg;100 mg',
+    'Cinarizina=25 mg;75 mg',
+    'Ciprofloxacino=500 mg;0,3% colírio',
+    'Citalopram=20 mg',
+    'Claritromicina=500 mg;125 mg/5 mL suspensão',
+    'Clonazepam (Rivotril)=0,5 mg;2 mg;2,5 mg/mL gotas',
+    'Clonidina=0,100 mg;0,150 mg;0,200 mg',
+    'Clopidogrel=75 mg',
+    'Cloridrato de dorzolamida (colírio)=2%',
+    'Cloridrato de metformina=500 mg;850 mg;1000 mg',
+    'Clorpromazina=25 mg;100 mg;40 mg/mL gotas',
+    'Clortalidona=12,5 mg;25 mg;50 mg',
+    'Desloratadina=5 mg;0,5 mg/mL xarope',
+    'Dexametasona=4 mg;0,1 mg/mL elixir;0,1% colírio',
+    'Dexclorfeniramina (Polaramine)=2 mg;0,4 mg/mL solução',
+    'Diazepam=5 mg;10 mg',
+    'Diclofenaco sódico/potássico=50 mg;100 mg;15 mg/mL gotas',
+    'Digoxina=0,25 mg',
+    'Diltiazem=30 mg;60 mg',
+    'Dipirona=500 mg;1 g;500 mg/mL gotas',
+    'Dizopiramida=100 mg',
+    'Domperidona=10 mg;1 mg/mL suspensão',
+    'Doxazosina=2 mg;4 mg',
+    'Doxiciclina=100 mg',
+    'Duloxetina=30 mg;60 mg',
+    'Enalapril=5 mg;10 mg;20 mg',
+    'Enoxaparina sódica=20 mg;40 mg;60 mg;80 mg injetável',
+    'Escitalopram=10 mg;15 mg;20 mg;20 mg/mL gotas',
+    'Espironolactona=25 mg;50 mg;100 mg',
+    'Ezetimiba=10 mg',
+    'Fenitoína=100 mg;20 mg/mL suspensão',
+    'Fenobarbital (Gardenal)=100 mg;40 mg/mL gotas',
+    'Finasterida=1 mg;5 mg',
+    'Fluconazol=150 mg',
+    'Flunarizina=10 mg',
+    'Fluoxetina=20 mg',
+    'Fluticasona (spray nasal/inalação)=50 mcg;250 mcg',
+    'Furosemida=40 mg',
+    'Gabapentina=300 mg;400 mg',
+    'Glibenclamida=5 mg',
+    'Gliclazida=30 mg;60 mg MR',
+    'Glimepirida=1 mg;2 mg;4 mg',
+    'Haloperidol (Haldol)=1 mg;5 mg;2 mg/mL gotas',
+    'Hidroclorotiazida=12,5 mg;25 mg;50 mg',
+    'Ibuprofeno=300 mg;600 mg;50 mg/mL gotas;100 mg/mL gotas',
+    'Imipramina=25 mg',
+    'Indapamida=1,5 mg SR;2,5 mg',
+    'Insulina NPH=100 UI/mL',
+    'Insulina Regular=100 UI/mL',
+    'Insulina Glargina / Lispro / Aspart=100 UI/mL',
+    'Ipratrópio (Atrovent)=0,25 mg/mL solução para inalação',
+    'Ivermectina=6 mg',
+    'Isossorbida (dinitrato)=5 mg sublingual;10 mg',
+    'Isossorbida (mononitrato)=20 mg;40 mg',
+    'Ivabradina=5 mg;7,5 mg',
+    'Latanoprosta (colírio)=0,005%',
+    'Latanoprosta + timolol (colírio)=0,005% + 0,5%',
+    'Leflunomida=20 mg',
+    'Levetiracetam=250 mg;500 mg;750 mg;100 mg/mL',
+    'Levodopa + benserazida (Prolopa)=100+25 mg;200+50 mg',
+    'Levodopa + carbidopa=250+25 mg;200+50 mg',
+    'Levofloxacino=500 mg;750 mg',
+    'Levomepromazina=25 mg;100 mg;4% gotas',
+    'Levotiroxina sódica=25 mcg;38 mcg;50 mcg;75 mcg;88 mcg;100 mcg;112 mcg;125 mcg;150 mcg;175 mcg;200 mcg',
+    'Lidocaína=2% geléia;5% pomada',
+    'Loratadina=10 mg;1 mg/mL xarope',
+    'Lorazepam=1 mg;2 mg',
+    'Losartana potássica=25 mg;50 mg;100 mg',
+    'Mebendazol=100 mg;20 mg/mL suspensão',
+    'Meloxicam=7,5 mg;15 mg',
+    'Metformin / Metformina XR=500 mg;7 mg;850 mg;1000 mg',
+    'Metildopa=250 mg;500 mg',
+    'Metoclopramida (Plasil)=10 mg;4 mg/mL gotas',
+    'Metoprolol (succinato/tartarato)=25 mg;50 mg;100 mg',
+    'Metronidazol=250 mg;400 mg;100 mg/g gel vaginal',
+    'Miconazol=2% creme vaginal;2% creme dermatológico',
+    'Mirtazapina=15 mg;30 mg;45 mg',
+    'Montelucaste de sódio=4 mg;5 mg;10 mg',
+    'Morfina=10 mg;30 mg;10 mg/mL',
+    'Naproxeno=250 mg;500 mg',
+    'Nfedipino (Adalat / Retard)=10 mg;20 mg',
+    'Nimesulida=100 mg;50 mg/mL gotas',
+    'Nistatina=100.000 UI/mL suspensão oral;25.000 UI/g creme vaginal',
+    'Nitrofurantoína=100 mg',
+    'Nortriptilina=10 mg;25 mg;50 mg;75 mg',
+    'Omeprazol=10 mg;20 mg;40 mg',
+    'Ondansetrona=4 mg;8 mg;2 mg/mL',
+    'Oxcarbazepina=300 mg;600 mg;60 mg/mL suspensão',
+    'Pantoprazol=20 mg;40 mg',
+    'Paracetamol=500 mg;750 mg;200 mg/mL gotas',
+    'Paracetamol + codeína (Tylex)=500 mg + 7,5 mg;500 mg + 30 mg',
+    'Paroxetina=15 mg;20 mg;25 mg',
+    'Permetrina=5% loção',
+    'Pilocarpina (colírio)=2%',
+    'Pioglitazona=15 mg;30 mg',
+    'Prednisolona=3 mg/mL solução oral',
+    'Prednisona=5 mg;20 mg;50 mg',
+    'Pregabalina=50 mg;75 mg;150 mg',
+    'Prometazina (Fenergan)=25 mg',
+    'Propafenona=300 mg',
+    'Propranolol=10 mg;40 mg;80 mg',
+    'Quetiapina=25 mg;100 mg;200 mg;300 mg',
+    'Ramipril=2,5 mg;5 mg;10 mg',
+    'Ranitidina=150 mg;300 mg',
+    'Risedronato de sódio=35 mg',
+    'Risperidona=1 mg;2 mg;3 mg;1 mg/mL solução',
+    'Rivaroxabana=10 mg;15 mg;20 mg',
+    'Rosuvastatina=5 mg;10 mg;20 mg;40 mg',
+    'Salbutamol (aerossol/spray)=100 mcg;5 mg/mL solução para inalação',
+    'Sertralina=25 mg;50 mg;100 mg',
+    'Sequil / Quetiapina=25 mg;100 mg',
+    'Simeticona (Luftal)=40 mg;75 mg/mL gotas',
+    'Sinvastatina=10 mg;20 mg;40 mg',
+    'Solução Fisiológica (Cloreto de sódio)=0,9%',
+    'Succinato de metoprolol=25 mg;50 mg;100 mg',
+    'Sulfacetamida sódica (colírio)=10%',
+    'Sulfadiazina de prata=1% creme',
+    'Sulfametoxazol + trimetoprima (Bactrim)=400+80 mg;800+160 mg;200+40 mg/5 mL',
+    'Sulfato de salbutamol=100 mcg',
+    'Sulfato ferroso=40 mg ferro elementar;125 mg/mL gotas',
+    'Toxina botulínica=100 UI',
+    'Tamoxifeno=10 mg;20 mg',
+    'Tamsulosina=0,4 mg',
+    'Tiamina (Vitamina B1)=300 mg',
+    'Timolol (colírio)=0,25%;0,5%',
+    'Tiotrópio=2,5 mcg inh',
+    'Tizanidina=2 mg',
+    'Topiramato=25 mg;50 mg;100 mg',
+    'Tramadol=50 mg;100 mg;50 mg/mL gotas',
+    'Trazodona=50 mg;100 mg;150 mg',
+    'Triancinolona acetonida=1 mg/g orabase',
+    'Valsartana=80 mg;160 mg;320 mg',
+    'Venlafaxina=37,5 mg;75 mg;150 mg',
+    'Verapamil=80 mg;120 mg',
+    'Vildagliptina=50 mg',
+    'Vildagliptina + metformina=50 mg + 850 mg;50 mg + 1000 mg',
+    'Vitamina D3 (Colecalciferol)=1.000 UI;7.000 UI;10.000 UI;50.000 UI;200 UI/gotas',
+    'Warfarina / Varfarina=1 mg;5 mg',
+    'Zolpidem=5 mg;10 mg'
+  ];
+
+  function norm(s){ return s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') : ''; }
+
+  var MED_BASE = MEDS_EXPANDED.map(function(l){
+    var p = l.split('=');
+    return { n: p[0].trim(), p: p[1] ? p[1].split(';') : [], k: norm(p[0].trim()), custom: false };
+  });
+
+  // Retorna a lista combinada de medicamentos (RENAME + Customizados aprendidos)
+  function getCombinedMeds() {
+    var combined = MED_BASE.slice();
+    var customList = db.customMeds || [];
+    
+    customList.forEach(function(cName){
+      var kNorm = norm(cName);
+      var exists = combined.some(function(item){ return item.k === kNorm; });
+      if(!exists) {
+        combined.push({ n: cName, p: [], k: kNorm, custom: true });
+      }
+    });
+
+    // Aprender também de todos os medicamentos salvos nos familiares no banco
+    if(db.d && db.d.length) {
+      db.d.forEach(function(item){
+        if(item.n) {
+          var kNorm = norm(item.n);
+          var exists = combined.some(function(i){ return i.k === kNorm; });
+          if(!exists) {
+            combined.push({ n: item.n, p: [], k: kNorm, custom: true });
+          }
+        }
+      });
+    }
+
+    return combined;
+  }
+
+  // Registra dinamicamente um novo medicamento no acervo pessoal
+  function registerNewMedName(name) {
+    if(!name) return;
+    var cleanName = name.trim();
+    var kNorm = norm(cleanName);
+    var all = getCombinedMeds();
+    var exists = all.some(function(i){ return i.k === kNorm; });
+    
+    if(!exists) {
+      if(!db.customMeds) db.customMeds = [];
+      db.customMeds.push(cleanName);
+      save();
+    }
+  }
+
+  function medHook(ins){
+    var ni = ins.n, di = ins.dose, sg = el('div','sug'), pr = el('div','pres');
+    sg.hidden = true;
+    
+    // Envolver campo em div.input-wrap
+    var wrap = el('div','input-wrap');
+    ni.parentNode.insertBefore(wrap, ni);
+    wrap.appendChild(ni);
+    wrap.appendChild(sg);
+    di.parentNode.appendChild(pr);
+
+    function pres(it){
+      pr.innerHTML = '';
+      if(!it || !it.p || !it.p.length) return;
+      it.p.forEach(function(t){
+        var b = el('button','',t);
+        b.type = 'button';
+        b.onclick = function(ev){
+          ev.preventDefault();
+          di.value = t;
+        };
+        pr.appendChild(b);
+      });
+      var n = el('div','note','Apresentações comuns; confira sempre com a receita.');
+      n.style.flexBasis = '100%';
+      n.style.margin = '2px 0 0';
+      pr.appendChild(n);
+    }
+
+    function hideSug() {
+      sg.hidden = true;
+      sg.innerHTML = '';
+    }
+
+    function selectMed(item) {
+      ni.value = item.n;
+      hideSug();
+      pres(item);
+    }
+
+    ni.addEventListener('input', function(){
+      var k = norm(ni.value.trim());
+      sg.innerHTML = '';
+      
+      if(k.length < 2) {
+        hideSug();
+        pres(null);
+        return;
+      }
+
+      var allMeds = getCombinedMeds();
+      var hit = allMeds.filter(function(i){ return i.k.indexOf(k) >= 0; }).slice(0, 7);
+
+      if(!hit.length) {
+        hideSug();
+        pres(null);
+        return;
+      }
+
+      sg.hidden = false;
+      hit.forEach(function(i){
+        var b = el('button');
+        b.type = 'button';
+        
+        var nameSpan = el('span', '', i.n);
+        b.appendChild(nameSpan);
+
+        if(i.custom) {
+          var tag = el('span', 'custom-tag', 'Salvo');
+          b.appendChild(tag);
+        }
+
+        // Mudar para mousedown para acionar antes da perda de foco no celular
+        b.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          selectMed(i);
+        });
+        b.addEventListener('touchstart', function(e){
+          e.preventDefault();
+          selectMed(i);
+        });
+
+        sg.appendChild(b);
+      });
+
+      var exactMatch = allMeds.filter(function(i){ return i.k === k; })[0];
+      pres(exactMatch);
+    });
+
+    // Fechar dropdown ao perder foco do input (com pequeno timeout para permitir clique)
+    ni.addEventListener('blur', function(){
+      setTimeout(hideSug, 200);
+    });
+
+    ni.addEventListener('focus', function(){
+      if(ni.value.trim().length >= 2) {
+        ni.dispatchEvent(new Event('input'));
+      }
+    });
+
+    var currentMatch = getCombinedMeds().filter(function(i){ return i.k === norm(ni.value.trim()); })[0];
+    pres(currentMatch);
+  }
+
+  function editMed(x){
+    var m = cur();
+    form(x ? 'Editar medicamento' : 'Novo medicamento',
+      [
+        {k:'n',l:'Medicamento',req:1,p:'Ex.: Losartana'},
+        {k:'dose',l:'Dose',p:'Ex.: 50 mg'},
+        {k:'f',l:'Como toma',p:'Ex.: 1 comprimido de manhã'},
+        {k:'doc',l:'Médico prescritor (opcional)',p:'Ex.: Dr. Silva'},
+        {k:'spec',l:'Especialidade (opcional)',p:'Ex.: Cardiologia'},
+        {k:'s',l:'Início (opcional)',t:'date'},
+        {k:'st',l:'Situação',t:'sel',o:[['on','Em uso'],['off','Suspenso']],d:'on'},
+        {k:'o',l:'Observações',t:'area'}
+      ],
+      x,
+      function(o){
+        registerNewMedName(o.n); // Aprende o nome do medicamento para uso futuro
+        if(x){ for(var k in o) x[k] = o[k]; }
+        else{ o.id = uid(); o.mid = m.id; db.d.push(o); }
+      },
+      x ? function(){ db.d = db.d.filter(function(y){ return y !== x; }); } : null,
+      undefined, medHook
+    );
+  }
+
+  function editExam(x){
+    var m = cur();
+    form(x ? 'Editar exame' : 'Novo resultado de exame',
+      [
+        {k:'n',l:'Exame',req:1,p:'Ex.: Hemoglobina glicada'},
+        {k:'dt',l:'Data',t:'date',req:1,d:today()},
+        {k:'v',l:'Resultado',req:1,p:'Ex.: 6.1'},
+        {k:'u',l:'Unidade',p:'Ex.: %'},
+        {k:'r',l:'Valor de referência',p:'Ex.: abaixo de 5.7'},
+        {k:'o',l:'Observações',t:'area'}
+      ],
+      x,
+      function(o){
+        if(x){ for(var k in o) x[k] = o[k]; }
+        else{ o.id = uid(); o.mid = m.id; db.x.push(o); }
+      },
+      x ? function(){ db.x = db.x.filter(function(y){ return y !== x; }); } : null
+    );
+  }
+
+  function card(t,s,extra,docInfo,fn,off,mv){
+    var c = el('div','card crow'+(off?' off':'')), g = el('div','grow');
+    g.appendChild(el('b','',t));
+    if(s) g.appendChild(el('div','s',s));
+    if(extra) g.appendChild(el('div','s',extra));
+    if(docInfo) g.appendChild(el('div','doc',docInfo));
+    c.appendChild(g);
+    if(mv){
+      var w = el('div','mv'), u = el('button','','▲'), d = el('button','','▼');
+      u.disabled = mv.f; d.disabled = mv.l;
+      u.setAttribute('aria-label','Subir'); d.setAttribute('aria-label','Descer');
+      u.onclick = function(e){ e.stopPropagation(); mv.up(); };
+      d.onclick = function(e){ e.stopPropagation(); mv.dn(); };
+      w.appendChild(u); w.appendChild(d); c.appendChild(w);
+    }
+    c.onclick = fn; return c;
+  }
+
+  function byDate(a,b){ return a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : 0; }
+  var xs = 'dd';
+  function xcmp(a,b){
+    var d = (a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : 0), n = a.n.localeCompare(b.n);
+    return xs === 'dd' ? (-d || n) : xs === 'da' ? (d || n) : xs === 'na' ? (n || -d) : (-n || -d);
+  }
+
+  function summary(m){
+    var L = ['FAMILIAR: ' + m.name];
+    if(m.o) L.push('Alergias/observações: ' + m.o);
+    L.push('', 'MEDICAMENTOS EM USO');
+    var on = db.d.filter(function(x){ return x.mid === m.id && x.st === 'on'; });
+    if(!on.length) L.push('- nenhum registrado');
+    on.forEach(function(x){
+      var doc = [x.doc, x.spec].filter(Boolean).join(' - ');
+      L.push('- ' + [x.n, x.dose, x.f].filter(Boolean).join(' — ') + (x.s ? ' (desde ' + fd(x.s) + ')' : '') + (doc ? ' [' + doc + ']' : ''));
+    });
+    L.push('', 'EXAMES (resultado mais recente de cada)');
+    var seen = {}, n = 0;
+    db.x.filter(function(x){ return x.mid === m.id; }).sort(byDate).forEach(function(x){
+      var k = x.n.toLowerCase(); if(seen[k]) return; seen[k] = 1; n++;
+      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r + ')' : '') + ' — ' + fd(x.dt));
+    });
+    if(!n) L.push('- nenhum registrado');
+    L.push('', 'Atualizado em ' + fd(today()));
+    return L.join('\n');
+  }
+
+  /* Renderizar Gráfico SVG para Evolução dos Exames */
+  function renderChart(m, examName) {
+    var list = db.x.filter(function(x){
+      return x.mid === m.id && norm(x.n) === norm(examName);
+    }).sort(function(a,b){ return a.dt > b.dt ? 1 : a.dt < b.dt ? -1 : 0; });
+
+    var points = [];
+    list.forEach(function(x){
+      var val = parseFloat(x.v.replace(',','.'));
+      if(!isNaN(val)) points.push({ dt: x.dt, v: val, orig: x });
+    });
+
+    if(points.length < 2) return null;
+
+    var box = el('div','chart-card');
+    var tHead = el('div','chart-title');
+    tHead.appendChild(el('span','','📈 Evolução: ' + examName));
+    
+    var closeBtn = el('button','link','Fechar gráfico');
+    closeBtn.onclick = function(){ selectedExamName = ''; render(); };
+    tHead.appendChild(closeBtn);
+    box.appendChild(tHead);
+
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "chart-svg");
+    svg.setAttribute("viewBox", "0 0 300 150");
+
+    var minV = Math.min.apply(Math, points.map(function(p){ return p.v; }));
+    var maxV = Math.max.apply(Math, points.map(function(p){ return p.v; }));
+    if(minV === maxV) { minV -= 1; maxV += 1; }
+    var padV = (maxV - minV) * 0.15;
+    minV -= padV; maxV += padV;
+
+    var W = 280, H = 100, xOff = 10, yOff = 20;
+
+    for(var bgL = 0; bgL <= 2; bgL++){
+      var ly = yOff + (H / 2) * bgL;
+      var line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", xOff); line.setAttribute("y1", ly);
+      line.setAttribute("x2", xOff + W); line.setAttribute("y2", ly);
+      line.setAttribute("stroke", "var(--line)");
+      line.setAttribute("stroke-dasharray", "3,3");
+      svg.appendChild(line);
+    }
+
+    var coords = points.map(function(p, i){
+      var cx = xOff + (points.length === 1 ? W/2 : (i / (points.length - 1)) * W);
+      var cy = yOff + H - ((p.v - minV) / (maxV - minV)) * H;
+      return { x: cx, y: cy, p: p };
+    });
+
+    var dPath = coords.map(function(c, i){ return (i === 0 ? 'M' : 'L') + c.x + ',' + c.y; }).join(' ');
+    var path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", dPath);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "var(--ac)");
+    path.setAttribute("stroke-width", "3");
+    svg.appendChild(path);
+
+    coords.forEach(function(c){
+      var circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", c.x); circle.setAttribute("cy", c.y);
+      circle.setAttribute("r", "5");
+      circle.setAttribute("fill", "var(--ac)");
+      svg.appendChild(circle);
+
+      var textVal = document.createElementNS(svgNS, "text");
+      textVal.setAttribute("x", c.x); textVal.setAttribute("y", c.y - 8);
+      textVal.setAttribute("text-anchor", "middle");
+      textVal.setAttribute("font-size", "10");
+      textVal.setAttribute("fill", "var(--text)");
+      textVal.setAttribute("font-weight", "bold");
+      textVal.textContent = c.p.v;
+      svg.appendChild(textVal);
+
+      var textDt = document.createElementNS(svgNS, "text");
+      textDt.setAttribute("x", c.x); textDt.setAttribute("y", yOff + H + 18);
+      textDt.setAttribute("text-anchor", "middle");
+      textDt.setAttribute("font-size", "9");
+      textDt.setAttribute("fill", "var(--muted)");
+      textDt.textContent = fd(c.p.dt).slice(0,5);
+      svg.appendChild(textDt);
+    });
+
+    box.appendChild(svg);
+    return box;
+  }
+
+  function checkBackupAlert(){
+    var alertBox = $('backupAlert');
+    alertBox.innerHTML = '';
+    var last = db.lastBackup || 0;
+    var days = (Date.now() - last) / (1000 * 60 * 60 * 24);
+    
+    if(days > 30){
+      var warn = el('div', 'backup-alert');
+      warn.appendChild(el('span', '', '⚠️ Faz mais de 30 dias que não faz backup dos seus dados.'));
+      var b = el('button', '', 'Fazer backup');
+      b.onclick = settings;
+      warn.appendChild(b);
+      alertBox.appendChild(warn);
+    }
+  }
+
+  function moveMember(m, dir){
+    var idx = db.m.indexOf(m);
+    if(idx < 0) return;
+    var nIdx = idx + dir;
+    if(nIdx >= 0 && nIdx < db.m.length){
+      var temp = db.m[idx];
+      db.m[idx] = db.m[nIdx];
+      db.m[nIdx] = temp;
+      save(); render();
+    }
+  }
+
+  function render(){
+    checkBackupAlert();
+
+    var ch = $('chips'); ch.innerHTML = '';
+    db.m.forEach(function(m, idx){
+      var item = el('div', 'chip-item' + (m.id === db.sel ? ' on' : ''));
+      
+      var bPrev = el('button', 'chip-mv', '◀');
+      bPrev.disabled = idx === 0;
+      bPrev.onclick = function(e){ e.stopPropagation(); moveMember(m, -1); };
+      item.appendChild(bPrev);
+
+      var bName = el('button', 'chip-btn', m.name);
+      bName.onclick = function(){ db.sel = m.id; q = ''; selectedExamName = ''; save(); render(); };
+      item.appendChild(bName);
+
+      var bNext = el('button', 'chip-mv', '▶');
+      bNext.disabled = idx === db.m.length - 1;
+      bNext.onclick = function(e){ e.stopPropagation(); moveMember(m, 1); };
+      item.appendChild(bNext);
+
+      ch.appendChild(item);
+    });
+
+    $('addFamBtn').onclick = function(){ editMember(); };
+
+    var p = $('panel'); p.innerHTML = ''; var m = cur();
+    if(!m){
+      p.appendChild(el('div','empty','Adicione o primeiro familiar para começar.'));
+      return;
+    }
+
+    var h = el('div','head'), l = el('div');
+    l.appendChild(el('b','',m.name));
+    if(m.o) l.appendChild(el('div','obs',m.o));
+    var e = el('button','link','Editar');
+    e.onclick = function(){ editMember(m); };
+    h.appendChild(l); h.appendChild(e); p.appendChild(h);
+
+    var tb = el('div','tabs');
+    [['d','💊 Remédios'],['x','🧪 Exames'],['r','📋 Resumo']].forEach(function(t){
+      var b = el('button', tab === t[0] ? 'on' : '', t[1]);
+      b.onclick = function(){ tab = t[0]; render(); };
+      tb.appendChild(b);
+    });
+    p.appendChild(tb);
+
+    // ABA REMÉDIOS
+    if(tab === 'd'){
+      var a = el('button','pri','+ Medicamento');
+      a.onclick = function(){ editMed(); }; p.appendChild(a);
+      
+      var all = db.d.filter(function(x){ return x.mid === m.id; });
+      var on = all.filter(function(x){ return x.st === 'on'; }), off = all.filter(function(x){ return x.st !== 'on'; });
+      if(!all.length) p.appendChild(el('div','empty','Nenhum medicamento registrado.'));
+      
+      var mvb = function(g,x){
+        var i = g.indexOf(x);
+        function go(d){
+          var n = g[i+d]; if(!n) return;
+          var a = db.d.indexOf(x), b = db.d.indexOf(n), t = db.d[a];
+          db.d[a] = db.d[b]; db.d[b] = t; save(); render();
+        }
+        return { up: function(){ go(-1); }, dn: function(){ go(1); }, f: i === 0, l: i === g.length - 1 };
+      };
+
+      on.forEach(function(x,i){
+        var docInfo = [x.doc, x.spec].filter(Boolean).join(' - ');
+        if(docInfo) docInfo = '👨‍⚕️ ' + docInfo;
+        p.appendChild(card((i+1) + '. ' + x.n, [x.dose, x.f].filter(Boolean).join(' · '), (x.s ? 'Desde ' + fd(x.s) : '') + (x.o ? (x.s ? ' · ' : '') + x.o : ''), docInfo, function(){ editMed(x); }, 0, mvb(on,x)));
+      });
+
+      if(off.length){
+        p.appendChild(el('h3','','Suspensos'));
+        off.forEach(function(x){
+          var docInfo = [x.doc, x.spec].filter(Boolean).join(' - ');
+          if(docInfo) docInfo = '👨‍⚕️ ' + docInfo;
+          p.appendChild(card(x.n, [x.dose, x.f].filter(Boolean).join(' · '), x.o || '', docInfo, function(){ editMed(x); }, 1, mvb(off,x)));
+        });
+      }
+    }
+
+    // ABA EXAMES
+    if(tab === 'x'){
+      var a2 = el('button','pri','+ Resultado de exame');
+      a2.onclick = function(){ editExam(); }; p.appendChild(a2);
+      
+      var all2 = db.x.filter(function(x){ return x.mid === m.id; });
+      if(all2.length){
+        var s = el('input','q'); s.placeholder = 'Buscar exame'; s.value = q;
+        s.oninput = function(){ q = s.value; list(); }; p.appendChild(s);
+        
+        var so = el('select','q');
+        [['dd','Data: mais recente primeiro'],['da','Data: mais antiga primeiro'],['na','Nome: A a Z'],['nd','Nome: Z a A']].forEach(function(o){
+          var op = el('option','',o[1]); op.value = o[0]; so.appendChild(op);
+        });
+        so.value = xs; so.onchange = function(){ xs = so.value; list(); }; p.appendChild(so);
+      }
+
+      var chartContainer = el('div');
+      p.appendChild(chartContainer);
+
+      var box = el('div'); p.appendChild(box);
+
+      var list = function(){
+        box.innerHTML = ''; chartContainer.innerHTML = '';
+        if(selectedExamName){
+          var cEl = renderChart(m, selectedExamName);
+          if(cEl) chartContainer.appendChild(cEl);
+        }
+
+        var k = norm(q), n = 0;
+        all2.slice().sort(xcmp).forEach(function(x){
+          if(k && norm(x.n).indexOf(k) < 0) return; n++;
+          var c = card(x.n + ': ' + x.v + (x.u ? ' ' + x.u : ''), fd(x.dt) + (x.r ? ' · ref.: ' + x.r : ''), x.o || '', null, function(){ editExam(x); });
+          
+          var btnG = el('button','link','📈 Evolução');
+          btnG.style.fontSize = '12px';
+          btnG.onclick = function(ev){
+            ev.stopPropagation();
+            selectedExamName = x.n;
+            render();
+          };
+          c.querySelector('.grow').appendChild(btnG);
+          box.appendChild(c);
+        });
+        if(!n) box.appendChild(el('div','empty', all2.length ? 'Nenhum exame encontrado.' : 'Nenhum exame registrado.'));
+      };
+      list();
+    }
+
+    // ABA RESUMO
+    if(tab === 'r'){
+      p.appendChild(el('pre','',summary(m)));
+      var c = el('button','pri','Copiar resumo');
+      c.onclick = function(){ copy(summary(m)); }; p.appendChild(c);
+      p.appendChild(el('p','note','Cole o resumo numa mensagem ou mostre a tela na consulta.'));
+    }
+  }
+
+  function settings(){
+    var s = $('sheet'); s.innerHTML = ''; s.appendChild(el('h2','','Backup e ajustes'));
+    s.appendChild(el('p','note','Se você limpar os dados do navegador ou trocar de celular, os registros somem. Guarde um backup regularmente.'));
+    
+    function btn(t,fn,c){
+      var b = el('button', c || 'sec', t); b.style.marginTop = '10px'; b.onclick = fn; s.appendChild(b); return b;
+    }
+
+    btn('Copiar backup (texto)', function(){
+      db.lastBackup = Date.now(); save();
+      copy(JSON.stringify(db));
+    });
+
+    btn('Baixar arquivo de backup', function(){
+      db.lastBackup = Date.now(); save();
+      var b = new Blob([JSON.stringify(db,null,1)],{type:'application/json'}), a = document.createElement('a');
+      a.href = URL.createObjectURL(b); a.download = 'saude-familia-backup-' + today() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('Backup descarregado');
+    });
+
+    s.appendChild(el('p','note','Se o download não iniciar, use “Copiar backup” e guarde o texto numa nota.'));
+    
+    var l = el('label','','Restaurar: cole o backup aqui'), t = el('textarea'); t.rows = 3; l.appendChild(t); s.appendChild(l);
+    var armed = false, r = btn('Restaurar', function(){
+      var o; try{ o = JSON.parse(t.value); }catch(e){}
+      if(!o || !o.m || !o.d || !o.x){ toast('Backup inválido'); return; }
+      if(!armed){ armed = true; r.textContent = 'Isso substitui os dados atuais: toque de novo'; return; }
+      db = o; db.lastBackup = Date.now(); save(); closeM(); render(); toast('Backup restaurado');
+    });
+
+    var a2 = false, w = el('button','del','Apagar todos os dados');
+    w.onclick = function(){
+      if(!a2){ a2 = true; w.textContent = 'Toque de novo para apagar tudo'; return; }
+      db = { m: [], d: [], x: [], sel: null, customMeds: [], lastBackup: Date.now() }; save(); closeM(); render();
+    };
+    s.appendChild(w);
+    btn('Fechar', closeM);
+    $('modal').hidden = false; document.body.style.overflow = 'hidden';
+  }
+
+  $('cfg').onclick = settings;
+  if(!cur() && db.m.length) db.sel = db.m[0].id;
+  render();
+
+  // Registra Service Worker para PWA
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').then(function(){
+        console.log('Service Worker registrado com sucesso.');
+      }).catch(function(err){
+        console.log('Falha ao registrar Service Worker:', err);
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
