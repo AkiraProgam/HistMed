@@ -400,6 +400,22 @@ pre {
   height: 160px;
   overflow: visible;
 }
+
+/* Estilos de Impressão e PDF */
+@media print {
+  body { background: #fff; color: #000; }
+  .top, .chips-wrap, .tabs, .pri, .sec, .ic, .backup-alert, .note, #modal, #toast, .link {
+    display: none !important;
+  }
+  main { max-width: 100%; margin: 0; padding: 0; }
+  pre {
+    border: 0;
+    padding: 0;
+    font-size: 14pt;
+    line-height: 1.6;
+    background: transparent;
+  }
+}
 </style>
 </head>
 <body>
@@ -472,6 +488,20 @@ pre {
     if(navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(t).then(function(){toast('Copiado');},fb);
     }else fb();
+  }
+
+  function processBackupObject(o){
+    if(!o || !o.m || !o.d || !o.x){
+      toast('Arquivo ou texto de backup inválido');
+      return false;
+    }
+    db = o;
+    db.lastBackup = Date.now();
+    save();
+    closeM();
+    render();
+    toast('Backup restaurado com sucesso!');
+    return true;
   }
 
   function form(title,fields,vals,onSave,onDel,delTxt,hook){
@@ -955,7 +985,7 @@ pre {
     var seen = {}, n = 0;
     db.x.filter(function(x){ return x.mid === m.id; }).sort(byDate).forEach(function(x){
       var k = x.n.toLowerCase(); if(seen[k]) return; seen[k] = 1; n++;
-      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r + ')' : '') + ' — ' + fd(x.dt));
+      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r : '') + ' — ' + fd(x.dt));
     });
     if(!n) L.push('- nenhum registrado');
     L.push('', 'Atualizado em ' + fd(today()));
@@ -1077,6 +1107,98 @@ pre {
       db.m[nIdx] = temp;
       save(); render();
     }
+  }
+
+  function settings(){
+    var s = $('sheet'); s.innerHTML = '';
+    s.appendChild(el('h2', '', '⚙️ Configurações & Backup'));
+
+    var secBackup = el('div');
+    secBackup.appendChild(el('h3', '', 'Backup e Restauração'));
+
+    var rowExp = el('div', 'row');
+    var btnExpText = el('button', 'pri', 'Exportar Texto');
+    btnExpText.onclick = function(){
+      db.lastBackup = Date.now();
+      save();
+      var json = JSON.stringify(db, null, 2);
+      var wrap = el('div');
+      wrap.appendChild(el('p', 'note', 'Copie o código JSON abaixo para guardar em local seguro:'));
+      var ta = el('textarea'); ta.rows = 8; ta.value = json;
+      wrap.appendChild(ta);
+      var btnCopy = el('button', 'pri', 'Copiar JSON');
+      btnCopy.style.marginTop = '8px';
+      btnCopy.onclick = function(){ copy(json); };
+      wrap.appendChild(btnCopy);
+      s.appendChild(wrap);
+    };
+
+    var btnExpFile = el('button', 'pri', 'Exportar Arquivo');
+    btnExpFile.onclick = function(){
+      db.lastBackup = Date.now();
+      save();
+      var blob = new Blob([JSON.stringify(db, null, 2)], {type: 'application/json'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'saude_familia_backup_' + today() + '.json';
+      a.click();
+      toast('Backup baixado com sucesso!');
+    };
+
+    rowExp.appendChild(btnExpText);
+    rowExp.appendChild(btnExpFile);
+    secBackup.appendChild(rowExp);
+
+    var rowImp = el('div', 'row');
+    var btnImpText = el('button', 'sec', 'Restaurar Texto');
+    btnImpText.onclick = function(){
+      var json = prompt('Cole aqui o texto JSON do backup:');
+      if(json){
+        try {
+          var obj = JSON.parse(json);
+          processBackupObject(obj);
+        } catch(err) {
+          toast('Texto JSON inválido!');
+        }
+      }
+    };
+
+    var btnImpFile = el('button', 'sec', 'Restaurar Arquivo');
+    var fileInput = el('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json,application/json';
+    fileInput.style.display = 'none';
+    fileInput.onchange = function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var reader = new FileReader();
+      reader.onload = function(evt){
+        try {
+          var obj = JSON.parse(evt.target.result);
+          processBackupObject(obj);
+        } catch(err) {
+          toast('Arquivo de backup inválido!');
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    btnImpFile.onclick = function(){ fileInput.click(); };
+
+    rowImp.appendChild(btnImpText);
+    rowImp.appendChild(btnImpFile);
+    secBackup.appendChild(rowImp);
+    s.appendChild(secBackup);
+
+    var rowClose = el('div', 'row');
+    rowClose.style.marginTop = '16px';
+    var btnClose = el('button', 'sec', 'Fechar');
+    btnClose.onclick = closeM;
+    rowClose.appendChild(btnClose);
+    s.appendChild(rowClose);
+
+    $('modal').hidden = false;
+    document.body.style.overflow = 'hidden';
   }
 
   function render(){
@@ -1213,64 +1335,50 @@ pre {
     // ABA RESUMO
     if(tab === 'r'){
       p.appendChild(el('pre','',summary(m)));
-      var c = el('button','pri','Copiar resumo');
-      c.onclick = function(){ copy(summary(m)); }; p.appendChild(c);
-      p.appendChild(el('p','note','Cole o resumo numa mensagem ou mostre a tela na consulta.'));
+      
+      var rowBtns = el('div','row');
+      rowBtns.style.marginTop = '0';
+      rowBtns.style.marginBottom = '10px';
+
+      var c = el('button','pri','Copiar texto');
+      c.onclick = function(){ copy(summary(m)); };
+      rowBtns.appendChild(c);
+
+      var printBtn = el('button','sec','📄 Imprimir / Salvar PDF');
+      printBtn.onclick = function(){
+        try {
+          if (window.self !== window.top) {
+            var printWin = window.open('', '_blank');
+            if (printWin) {
+              printWin.document.write('<!DOCTYPE html><html><head><title>Resumo - ' + m.name + '</title><style>body{font-family:system-ui,sans-serif;padding:20px;line-height:1.6;}pre{white-space:pre-wrap;font-family:inherit;font-size:16px;}</style></head><body><pre>' + summary(m) + '</pre></body></html>');
+              printWin.document.close();
+              printWin.focus();
+              setTimeout(function(){ printWin.print(); printWin.close(); }, 250);
+              return;
+            }
+          }
+          window.print();
+        } catch(e) {
+          toast('Copie o texto para imprimir manualmente.');
+        }
+      };
+      rowBtns.appendChild(printBtn);
+
+      p.appendChild(rowBtns);
+      p.appendChild(el('p','note','Copie para colar em mensagens ou use a opção de Imprimir/Salvar PDF para gerar um documento formal para a consulta.'));
     }
-  }
-
-  function settings(){
-    var s = $('sheet'); s.innerHTML = ''; s.appendChild(el('h2','','Backup e ajustes'));
-    s.appendChild(el('p','note','Se você limpar os dados do navegador ou trocar de celular, os registros somem. Guarde um backup regularmente.'));
-    
-    function btn(t,fn,c){
-      var b = el('button', c || 'sec', t); b.style.marginTop = '10px'; b.onclick = fn; s.appendChild(b); return b;
-    }
-
-    btn('Copiar backup (texto)', function(){
-      db.lastBackup = Date.now(); save();
-      copy(JSON.stringify(db));
-    });
-
-    btn('Baixar arquivo de backup', function(){
-      db.lastBackup = Date.now(); save();
-      var b = new Blob([JSON.stringify(db,null,1)],{type:'application/json'}), a = document.createElement('a');
-      a.href = URL.createObjectURL(b); a.download = 'saude-familia-backup-' + today() + '.json';
-      document.body.appendChild(a); a.click(); a.remove();
-      toast('Backup descarregado');
-    });
-
-    s.appendChild(el('p','note','Se o download não iniciar, use “Copiar backup” e guarde o texto numa nota.'));
-    
-    var l = el('label','','Restaurar: cole o backup aqui'), t = el('textarea'); t.rows = 3; l.appendChild(t); s.appendChild(l);
-    var armed = false, r = btn('Restaurar', function(){
-      var o; try{ o = JSON.parse(t.value); }catch(e){}
-      if(!o || !o.m || !o.d || !o.x){ toast('Backup inválido'); return; }
-      if(!armed){ armed = true; r.textContent = 'Isso substitui os dados atuais: toque de novo'; return; }
-      db = o; db.lastBackup = Date.now(); save(); closeM(); render(); toast('Backup restaurado');
-    });
-
-    var a2 = false, w = el('button','del','Apagar todos os dados');
-    w.onclick = function(){
-      if(!a2){ a2 = true; w.textContent = 'Toque de novo para apagar tudo'; return; }
-      db = { m: [], d: [], x: [], sel: null, customMeds: [], lastBackup: Date.now() }; save(); closeM(); render();
-    };
-    s.appendChild(w);
-    btn('Fechar', closeM);
-    $('modal').hidden = false; document.body.style.overflow = 'hidden';
   }
 
   $('cfg').onclick = settings;
-  if(!cur() && db.m.length) db.sel = db.m[0].id;
+
+  if(!db.sel && db.m.length) db.sel = db.m[0].id;
   render();
 
-  // Registra Service Worker para PWA
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js').then(function(){
-        console.log('Service Worker registrado com sucesso.');
-      }).catch(function(err){
-        console.log('Falha ao registrar Service Worker:', err);
+  // Registro do Service Worker para suporte a PWA Offline
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('./sw.js').catch(function(err){
+        console.log('Falha ao registrar ServiceWorker:', err);
       });
     });
   }
