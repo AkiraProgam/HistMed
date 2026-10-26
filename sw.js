@@ -2,7 +2,7 @@
    Estratégia: tenta a internet primeiro (sempre a versão mais nova); se estiver offline
    ou demorar mais de 3 s, usa a cópia guardada. Só apaga caches deste app (prefixo próprio). */
 const PREFIXO = 'saude-familia-';
-const CACHE = PREFIXO + 'v7.2';
+const CACHE = PREFIXO + 'v7.3';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
