@@ -478,7 +478,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.2</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.3</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -638,6 +638,49 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     inc.forEach(function(r){ if(!seen[r.id]) out.push(r); });
     return out;
   }
+  function importSelectedMembers(backup){
+    var sheet=$('sheet');sheet.innerHTML='';sheet.appendChild(el('h2','','Atualizar familiares selecionados'));
+    sheet.appendChild(el('p','note','Marque somente quem deseja importar. Os demais familiares deste aparelho permanecem como estão. Registros com o mesmo código serão atualizados pelo arquivo; registros que só existem neste aparelho serão mantidos.'));
+    if(backup.backupCreatedAt)sheet.appendChild(el('p','note','Arquivo criado em '+new Date(backup.backupCreatedAt).toLocaleString('pt-BR')));
+    var choices=[];
+    backup.m.forEach(function(member,index){
+      var box=el('div','card'),label=el('label'),check=el('input');check.type='checkbox';check.style.cssText='width:24px;height:24px;margin:0;flex:none';label.style.cssText='display:flex;gap:10px;align-items:center';label.appendChild(check);label.appendChild(el('b','',member.name));box.appendChild(label);
+      var meds=backup.d.filter(function(x){return x.mid===member.id;}),exams=backup.x.filter(function(x){return x.mid===member.id;});box.appendChild(el('p','note',meds.length+' medicamento(s) · '+exams.length+' exame(s)'));
+      var targetLabel=el('label','','Importar para'),target=el('select');target.id='import-member-'+index;targetLabel.htmlFor=target.id;
+      var newOption=el('option','','Adicionar como novo familiar');newOption.value='new';target.appendChild(newOption);
+      db.m.forEach(function(local){var option=el('option','','Atualizar '+local.name);option.value='member:'+local.id;target.appendChild(option);});
+      var same=db.m.filter(function(local){return local.id===member.id;})[0];
+      if(same)target.value='member:'+same.id;
+      else if(db.m.some(function(local){return norm(local.name)===norm(member.name);})){var choose=el('option','','Escolha o cadastro correspondente');choose.value='';target.insertBefore(choose,target.firstChild);target.value='';}
+      target.disabled=true;check.onchange=function(){target.disabled=!check.checked;};box.appendChild(targetLabel);box.appendChild(target);sheet.appendChild(box);choices.push({member:member,check:check,target:target});
+    });
+    var error=el('div','err');error.setAttribute('role','alert');sheet.appendChild(error);
+    var row=el('div','row'),cancel=el('button','sec','Cancelar'),apply=el('button','pri','Importar selecionados');cancel.onclick=function(){modalDirty=false;settings();};
+    apply.onclick=function(){
+      error.textContent='';var selected=choices.filter(function(c){return c.check.checked;});if(!selected.length){error.textContent='Marque pelo menos um familiar.';return;}
+      var members=[],meds=[],exams=[],targets=new Set(),invalid=false;
+      selected.forEach(function(c){
+        if(!c.target.value){error.textContent='Escolha onde importar '+c.member.name+'.';invalid=true;return;}
+        var targetId=c.target.value==='new'?c.member.id:c.target.value.slice(7);
+        if(targets.has(targetId)){error.textContent='Escolha um cadastro diferente para cada familiar.';invalid=true;return;}targets.add(targetId);
+        if(c.target.value==='new'&&db.m.some(function(m){return m.id===targetId;})){error.textContent='Este familiar já existe. Selecione a opção de atualizar seu cadastro.';invalid=true;return;}
+        var member=clone(c.member);member.id=targetId;members.push(member);
+        [['d',meds],['x',exams]].forEach(function(pair){backup[pair[0]].filter(function(x){return x.mid===c.member.id;}).forEach(function(x){
+          if(db[pair[0]].some(function(local){return local.id===x.id&&local.mid!==targetId;})||pair[1].some(function(r){return r.id===x.id;})){error.textContent='Há códigos de registros repetidos ou vinculados a outro familiar. Nada foi importado.';invalid=true;return;}
+          var record=clone(x);record.mid=targetId;pair[1].push(record);
+        });});
+      });
+      if(invalid)return;
+      if(!confirm('Importar '+members.map(function(m){return m.name;}).join(', ')+'?\n\nO arquivo prevalecerá nos registros com o mesmo código. Os outros familiares não serão alterados.'))return;
+      var before=captureDb();try{localStorage.setItem(KEY+'_antes_restauro',JSON.stringify(db));}catch(e){toast('Não foi possível guardar uma cópia de segurança. A importação foi cancelada.',6000);return;}
+      db.m=mergeById(db.m,members);db.d=mergeById(db.d,meds);db.x=mergeById(db.x,exams);
+      meds.forEach(function(m){if((Array.isArray(backup.customMeds)?backup.customMeds:[]).indexOf(m.n)>=0&&db.customMeds.indexOf(m.n)<0)db.customMeds.push(m.n);});
+      if(!db.sel&&db.m.length)db.sel=db.m[0].id;
+      if(!save()){rollbackDb(before);return;}modalDirty=false;closeM();render();toast('Cadastro(s) selecionado(s) importado(s). Os demais foram preservados.',5000);
+    };
+    row.appendChild(cancel);row.appendChild(apply);sheet.appendChild(row);showM();
+  }
+
   function processBackupObject(o, soSubstituir){
     if(!valid(o)){ toast('Backup inválido: o formato não é o esperado. Nada foi alterado.',5000); return false; }
     var resumo=o.m.length+' familiar(es), '+o.d.length+' remédio(s), '+o.x.length+' exame(s)';
@@ -645,6 +688,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     if(temDados && !soSubstituir){
       var sheet=$('sheet');sheet.innerHTML='';sheet.appendChild(el('h2','','Restaurar backup'));
       sheet.appendChild(el('p','',resumo+(o.backupCreatedAt?' · Criado em '+new Date(o.backupCreatedAt).toLocaleString('pt-BR'):'')));
+      var scoped=el('button','pri','Atualizar familiares selecionados');scoped.style.marginTop='10px';scoped.onclick=function(){importSelectedMembers(o);};sheet.appendChild(scoped);
       [['Adicionar ao que já existe','merge'],['Substituir tudo','replace'],['Cancelar','cancel']].forEach(function(opt){var b=el('button','sec',opt[0]);b.style.marginTop='10px';b.onclick=function(){if(opt[1]==='cancel'){settings();return;}if(opt[1]==='replace'&&!confirm('Substituir todos os dados atuais por este backup?'))return;processBackupObject(o,opt[1]);};sheet.appendChild(b);});showM();return false;
     }
     merge=soSubstituir==='merge';
@@ -664,14 +708,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.2";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.3";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.2";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.3";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
