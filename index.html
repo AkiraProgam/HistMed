@@ -1291,6 +1291,37 @@ pre {
     showM();
   }
 
+  /* Tela de resultado da exportação: mostra o que foi gerado e diz com clareza o que aconteceu (nada de falha silenciosa). */
+  function exportFileScreen(o){
+    var json=JSON.stringify(o,null,2), fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+today()+'.json';
+    var s=$('sheet'); s.innerHTML=''; s.appendChild(el('h2','','Exportar arquivo'));
+    s.appendChild(el('p','note',(o.parcial?'Arquivo PARCIAL com ':'Backup completo com ')+o.m.length+' familiar(es): '+o.m.map(function(m){return m.name;}).join(', ')+'.'));
+    var st=el('div','note'); st.style.cssText='font-weight:600;min-height:1.4em;margin-top:10px';
+    function done(msg){ if(!o.parcial){ db.lastBackup=Date.now(); save(); } st.textContent=msg; }
+    function download(){
+      try{
+        var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+        a.download=fname; document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); },1000);
+        done('✅ Arquivo baixado: '+fname+'. Procure na pasta Downloads do aparelho.');
+      }catch(e){ st.textContent='⚠️ Não foi possível baixar neste aparelho. Use "Copiar como texto".'; }
+    }
+    function share(){
+      var file=null; try{ file=new File([json],fname,{type:'application/json'}); }catch(e){}
+      if(!(navigator.share && file && navigator.canShare && navigator.canShare({files:[file]}))){
+        st.textContent='ℹ️ Este aparelho não compartilha arquivos direto daqui. Use "Baixar arquivo" ou "Copiar como texto".'; return; }
+      navigator.share({files:[file],title:'Saúde da família'}).then(function(){ done('✅ Arquivo compartilhado.'); })
+        .catch(function(e){ st.textContent=(e && e.name==='AbortError') ? 'Compartilhamento cancelado.' : '⚠️ O aparelho recusou o compartilhamento. Use "Baixar arquivo" ou "Copiar como texto".'; });
+    }
+    var b1=el('button','pri','📤 Compartilhar'), b2=el('button','pri','⬇️ Baixar arquivo'), b3=el('button','sec','📋 Copiar como texto'), b4=el('button','sec','Voltar');
+    [b1,b2,b3,b4].forEach(function(b){ b.style.marginTop='8px'; });
+    b1.onclick=share; b2.onclick=download; b4.onclick=settings;
+    b3.onclick=function(){ copy(json); done('✅ Texto copiado: cole onde quiser guardar ou enviar.'); };
+    if(navigator.share) s.appendChild(b1);
+    s.appendChild(b2); s.appendChild(b3); s.appendChild(st); s.appendChild(b4);
+    showM();
+  }
+
   function settings(){
     var s = $('sheet'); s.innerHTML = '';
     s.appendChild(el('h2', '', '⚙️ Configurações & Backup'));
@@ -1311,22 +1342,7 @@ pre {
     }); };
 
     var btnExpFile = el('button', 'pri', 'Exportar Arquivo');
-    btnExpFile.onclick = function(){ chooseMembers('Exportar arquivo: quem incluir?', function(ids){
-      var o=exportable(ids), json=JSON.stringify(o,null,2), file=null;
-      var fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+today()+'.json';
-      function ok(msg){ if(!o.parcial){ db.lastBackup=Date.now(); save(); } toast(msg); }
-      try{ file=new File([json],fname,{type:'application/json'}); }catch(e){}
-      if(file && navigator.canShare && navigator.canShare({files:[file]})){
-        navigator.share({files:[file],title:'Saúde da família'}).then(function(){ ok('Arquivo compartilhado'); }).catch(function(){});
-      } else {
-        var a=document.createElement('a');
-        a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
-        a.download=fname; document.body.appendChild(a); a.click();
-        setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); },1000);
-        ok(o.parcial?'Arquivo parcial baixado':'Backup baixado com sucesso!');
-      }
-      settings();
-    }); };
+    btnExpFile.onclick = function(){ chooseMembers('Exportar arquivo: quem incluir?', function(ids){ exportFileScreen(exportable(ids)); }); };
 
     rowExp.appendChild(btnExpText);
     rowExp.appendChild(btnExpFile);
