@@ -445,6 +445,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .sheet .row{position:sticky;bottom:0;background:var(--card);padding:10px 0;z-index:2;}
 .obs, .card { overflow-wrap:anywhere; }
 @media print{.report-options,.report-status,.screen-only{display:none!important;}}
+.batch-group,.date-edit-list{border:1px solid var(--line);border-radius:12px;padding:10px;margin:10px 0;}
+.batch-group>summary,.date-edit-list>summary{min-height:44px;cursor:pointer;font-weight:600;padding:10px 0;}
+.batch-row{border-top:1px solid var(--line);padding:8px 0 12px;}
+.batch-values{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px;align-items:end;}
+.batch-values label{min-width:0;}
+.report-date{border-top:1px solid var(--line);padding:10px 0;}
+.report-date-header{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.report-date-header .note{margin:0;}
+.report-date details{padding-left:8px;}
+.report-date details>summary{font-size:14px;font-weight:400;}
+.report-options label{overflow-wrap:anywhere;}
+.report-options select{min-width:0;}
+.report-options>label{display:block;}
+@media(max-width:360px){.batch-values{grid-template-columns:minmax(0,1fr);}}
+@media print{.date-edit-list{display:none!important;}}
 </style>
 </head>
 <body>
@@ -463,7 +478,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.6</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.0</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -472,7 +487,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 <script>
 (function(){
   var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
-  var reportExcluded={}, modalDirty=false, previousFocus=null;
+  var reportMode='dates', reportExcluded={}, modalDirty=false, previousFocus=null;
   var db=load();
   var base=JSON.parse(JSON.stringify(db));
 
@@ -649,14 +664,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.6";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.0";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.6";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.0";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -935,7 +950,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     if(!/^-?\d+(\.\d+)?$/.test(t))return NaN;var n=Number(t);return isFinite(n)?n:NaN;
   }
   var COMMON_EXAMS=['Hemoglobina glicada (HbA1c)','Glicemia de jejum','Colesterol total','LDL','HDL','Triglicerídeos','Creatinina','TFG','Ureia','Ácido úrico','TSH','T4 livre','Hemoglobina','Hematócrito','Leucócitos','Plaquetas','Ferritina','Vitamina D (25-OH)','Vitamina B12','TGO (AST)','TGP (ALT)','GGT','PCR','VHS','PSA total','Sódio','Potássio','Cálcio','Pressão arterial'];
-  function examNames(){var seen={},out=[];db.x.map(function(x){return x.n;}).concat(COMMON_EXAMS).forEach(function(n){var k=norm(n);if(!seen[k]){seen[k]=1;out.push(n);}});return out;}
+  function examNames(){var seen={},out=[];db.x.map(function(x){return x.n;}).concat(COMMON_EXAMS).concat(EXAM_CATALOG.map(function(d){return d.name;})).forEach(function(n){var k=norm(n);if(!seen[k]){seen[k]=1;out.push(n);}});return out;}
 
   var MED_BASE = MEDS_EXPANDED.map(function(l){
     var p = l.split('=');
@@ -1133,11 +1148,136 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     );
   }
 
+  // Catálogo para entrada manual: nomes e siglas, sem interpretação de resultados.
+  var EXAM_GROUPS = [
+    ['Hemograma',[
+      ['HB','Hemoglobina',['HGB']],['HT','Hematócrito',['HCT']],['VCM','Volume corpuscular médio',['MCV']],['HCM','Hemoglobina corpuscular média',['MCH']],['RDW','RDW',[]],
+      ['PLQ','Plaquetas',['PLT']],['GB','Leucócitos',['Leucócitos totais','Glóbulos brancos','WBC']],['S','Segmentados',['Neutrófilos segmentados']],['L','Linfócitos',[]]
+    ]],
+    ['Ferro e outros',[
+      ['FERRITINA','Ferritina',[]],['FE','Ferro',[]],['SAT TRANSF','Saturação de transferrina',['Saturação da transferrina','TSAT','IST']],['RETIC','Reticulócitos',[]],['PSOF','Pesquisa de sangue oculto nas fezes',['Sangue oculto nas fezes','Sangue oculto']]
+    ]],
+    ['Glicemia',[
+      ['GLIC','Glicemia de jejum',['Glicemia','Glicose','GLI','GLU']],['HBA1C','Hemoglobina glicada (HbA1c)',['Hemoglobina glicada','Hemoglobina glicosilada','A1C','HGL']]
+    ]],
+    ['Função renal e eletrólitos',[
+      ['UR','Ureia',[]],['CR','Creatinina',['CREA']],['TFG','TFG',['Taxa de filtração glomerular','EGFR','ETFG']],['NA','Sódio',[]],['K','Potássio',[]],['CA','Cálcio',['Cálcio total']],['CA ION','Cálcio ionizado',[]],['ALB','Albumina',[]],['ALBUMINURIA','Albuminúria',[]],['AU','Ácido úrico',[]]
+    ]],
+    ['Fígado e enzimas',[
+      ['TGO','TGO (AST)',['TGO','AST','Transaminase oxalacética']],['TGP','TGP (ALT)',['TGP','ALT','Transaminase pirúvica']],['CPK','CPK',['CK','Creatinoquinase']],['BT','Bilirrubina total',[]],['BD','Bilirrubina direta',[]],['BI','Bilirrubina indireta',[]],['GGT','GGT',[]]
+    ]],
+    ['Perfil lipídico',[
+      ['CT','Colesterol total',['Colesterol']],['HDL','HDL',['Colesterol HDL']],['LDL','LDL',['Colesterol LDL']],['TGL','Triglicerídeos',['Triglicérides','TG','TRIG']]
+    ]],
+    ['Tireoide',[
+      ['TSH','TSH',[]],['T4 LIVRE','T4 livre',['T4L','FT4']]
+    ]],
+    ['Vitaminas',[
+      ['VIT D','Vitamina D (25-OH)',['Vitamina D','25-OH vitamina D']],['VIT B12','Vitamina B12',['Vitamina B 12','B12']],['AC. FOLICO','Ácido fólico',['Folato']]
+    ]],
+    ['Próstata',[
+      ['PSA TOTAL','PSA total',[]],['PSA LIVRE','PSA livre',[]]
+    ]],
+    ['Urina e urocultura',[
+      ['UR1: LEUCO','Urina 1 — Leucócitos',['UR 1: LEUCO']],['UR1: HMC','Urina 1 — Hemácias',['UR 1: HMC']],['UR1: N','Urina 1 — Nitrito',['UR 1: N']],['UR1: CIL','Urina 1 — Cilindros',['UR 1: CIL']],['URO','Urocultura',[]]
+    ]]
+  ];
+  var EXAM_LOOKUP = Object.create(null), EXAM_CATALOG=[];
+  EXAM_GROUPS.forEach(function(group,gi){group[1].forEach(function(item){var def={code:item[0],name:item[1],group:gi,order:EXAM_CATALOG.length};EXAM_CATALOG.push(def);[item[0],item[1]].concat(item[2]).forEach(function(n){EXAM_LOOKUP[norm(n)]=def;});});});
+  function examDef(name){return EXAM_LOOKUP[norm(name)]||null;}
+  function examCode(x){var def=examDef(x.n);return (typeof x.abbr==='string'?x.abbr:'').trim()||(def?def.code:x.n);}
+  function examIdentity(x){var def=examDef(x.n);return def?def.name:x.n;}
+  function reportExams(m){
+    var list=db.x.filter(function(x){return x.mid===m.id&&(reportExcluded[m.id]||[]).indexOf(x.id)<0;}).slice().sort(byDate);
+    if(reportMode!=='latest')return list;
+    var seen=Object.create(null);return list.filter(function(x){var k=norm(examIdentity(x))+'|'+norm(String(x.u||''));if(seen[k])return false;seen[k]=true;return true;});
+  }
+  function examReportLines(m){
+    var list=reportExams(m),dates=Array.from(new Set(list.map(function(x){return x.dt;}))).sort().reverse(),out=[];
+    dates.forEach(function(date){
+      out.push(fd(date));
+      var items=list.filter(function(x){return x.dt===date;}).sort(function(a,b){var da=examDef(a.n),dbb=examDef(b.n);return (da?da.order:999)-(dbb?dbb.order:999)||a.n.localeCompare(b.n);});
+      var groups=[];items.forEach(function(x){var d=examDef(x.n),key=d?d.group:EXAM_GROUPS.length;var g=groups.filter(function(g){return g.key===key;})[0];if(!g){g={key:key,items:[]};groups.push(g);}g.items.push(examCode(x)+' = '+x.v+(x.u?' '+x.u:''));});
+      groups.forEach(function(g){for(var i=0;i<g.items.length;i+=8)out.push(g.items.slice(i,i+8).join('; '));});out.push('');
+    });return out.length?out:['- nenhum exame incluído neste relatório'];
+  }
+  function editExamBatch(initialDate){
+    var member=cur(),sheet=$('sheet');sheet.innerHTML='';sheet.appendChild(el('h2','','Exames por data — '+member.name));
+    sheet.appendChild(el('p','note','Informe a data da coleta e preencha somente os exames realizados. Use o resultado e a unidade do laudo. É possível adicionar outros exames ao final.'));
+    var dateLabel=el('label','','Data da coleta *'),dateInput=el('input');dateInput.type='date';dateInput.value=initialDate||today();dateLabel.appendChild(dateInput);sheet.appendChild(dateLabel);
+    var body=el('div'),rows=[],loadedDate=dateInput.value,batchDirty=false;sheet.appendChild(body);body.addEventListener('input',function(){batchDirty=true;});
+    var error=el('div','err');error.setAttribute('role','alert');sheet.appendChild(error);
+    function addRow(parent,def,original,custom){
+      var row=el('div','batch-row'),fields={};
+      if(custom){
+        var nl=el('label','','Nome do exame'),ni=el('input');ni.value=original?original.n:'';ni.placeholder='Ex.: PCR';nl.appendChild(ni);row.appendChild(nl);fields.name=ni;
+        var al=el('label','','Sigla (opcional)'),ai=el('input');ai.value=original?(original.abbr||''):'';ai.placeholder='Ex.: PCR';al.appendChild(ai);row.appendChild(al);fields.abbr=ai;
+      }
+      var line=el('div','batch-values'),vl=el('label','',custom?'Resultado':def.code+' — '+def.name),vi=el('input');vi.type='text';vi.placeholder='Resultado (opcional)';vi.value=original?original.v:'';vl.appendChild(vi);line.appendChild(vl);
+      var ul=el('label','','Unidade (opcional)'),ui=el('input');ui.value=original?(original.u||''):'';ui.placeholder='Conforme o laudo';ul.appendChild(ui);line.appendChild(ul);row.appendChild(line);
+      fields.value=vi;fields.unit=ui;fields.original=original;fields.def=def;
+      if(original){var details=el('details');details.appendChild(el('summary','','Referência e observações'));[['r','Valor de referência'],['o','Observações']].forEach(function(a){var lab=el('label','',a[1]),inp=el('textarea');inp.rows=2;inp.value=original[a[0]]||'';lab.appendChild(inp);details.appendChild(lab);fields[a[0]]=inp;});row.appendChild(details);}
+      else if(custom){var remove=el('button','link','Remover campo');remove.type='button';remove.onclick=function(){rows=rows.filter(function(r){return r!==fields;});row.remove();modalDirty=true;batchDirty=true;};row.appendChild(remove);}
+      parent.appendChild(row);rows.push(fields);return fields;
+    }
+    function populate(date){
+      body.innerHTML='';rows=[];loadedDate=date;error.textContent='';batchDirty=false;
+      var existing=db.x.filter(function(x){return x.mid===member.id&&x.dt===date;}),used=new Set();
+      EXAM_GROUPS.forEach(function(group,gi){var section=el('details','batch-group');section.appendChild(el('summary','',group[0]));
+        group[1].forEach(function(item){var def=examDef(item[1]),matches=existing.filter(function(x){return examDef(x.n)===def;});var original=matches[0]||null;if(original){used.add(original.id);section.open=true;}addRow(section,def,original,false);});body.appendChild(section);
+      });
+      var custom=el('div','batch-custom');custom.appendChild(el('h3','','Outros exames'));body.appendChild(custom);
+      existing.filter(function(x){return !used.has(x.id);}).forEach(function(x){addRow(custom,null,x,true);});
+      var add=el('button','sec','+ Outro exame');add.type='button';add.onclick=function(){var fields=addRow(custom,null,null,true);fields.name.focus();modalDirty=true;batchDirty=true;};body.appendChild(add);
+    }
+    dateInput.onchange=function(){if(!dateInput.value){error.textContent='Informe uma data válida.';return;}if(batchDirty&&!confirm('Trocar a data e descartar os campos ainda não salvos?')){dateInput.value=loadedDate;return;}populate(dateInput.value);modalDirty=false;};
+    var actions=el('div','row'),cancel=el('button','sec','Cancelar'),saveButton=el('button','pri','Salvar exames');cancel.onclick=closeM;
+    saveButton.onclick=function(){
+      error.textContent='';if(!dateInput.value||dateInput.value!==loadedDate){error.textContent='Informe a data da coleta antes de preencher os exames.';dateInput.focus();return;}
+      var values=[],removed=[],invalid=false,keys=Object.create(null);
+      rows.forEach(function(row){
+        var value=row.value.value.trim(),name=row.name?row.name.value.trim():row.def.name;
+        if(!value){if(row.original)removed.push(row.original);else if(row.name&&name){error.textContent='Preencha o resultado de '+name+' ou remova o campo.';invalid=true;}return;}
+        if(!name){error.textContent='Informe o nome dos exames adicionais com resultado.';row.name.focus();invalid=true;return;}
+        var unit=row.unit.value.trim(),definition=examDef(name),key=norm(definition?definition.name:name)+'|'+norm(unit);
+        // Duplicatas já existentes são preservadas; novas duplicatas exigem conferência.
+        if(keys[key]&&(!row.original||!keys[key].original)){error.textContent='Há dois campos para '+name+' com a mesma unidade. Confira os resultados antes de salvar.';invalid=true;return;}keys[key]=row;
+        var item=row.original?clone(row.original):{id:uid(),mid:member.id,r:'',o:''};item.n=row.original?row.original.n:name;item.dt=loadedDate;item.v=value;item.u=unit;
+        if(row.abbr)item.abbr=row.abbr.value.trim();else if(!row.original)item.abbr='';
+        if(row.r)item.r=row.r.value.trim();if(row.o)item.o=row.o.value.trim();values.push(item);
+      });
+      if(invalid)return;if(!values.length&&!removed.length){error.textContent='Preencha pelo menos um resultado.';return;}
+      if(removed.length&&!confirm('Os resultados apagados dos campos serão excluídos: '+removed.map(function(x){return x.n;}).join(', ')+'. Continuar?'))return;
+      var before=captureDb(),replaced=new Set(values.map(function(x){return x.id;})),deleted=new Set(removed.map(function(x){return x.id;}));
+      db.x=db.x.filter(function(x){return !replaced.has(x.id)&&!deleted.has(x.id);}).concat(values);
+      if(!save()){rollbackDb(before);return;}modalDirty=false;closeM();render();if(removed.length)offerUndo(before);else toast(values.length+' resultado(s) salvos.');
+    };
+    actions.appendChild(cancel);actions.appendChild(saveButton);sheet.appendChild(actions);populate(loadedDate);showM();
+  }
+  function reportOptions(m,p){
+    var all=db.x.filter(function(x){return x.mid===m.id;}).slice().sort(byDate),excluded=reportExcluded[m.id]||[];
+    var details=el('details','report-options');details.appendChild(el('summary','','Selecionar datas e exames do relatório'));
+    details.appendChild(el('p','note','Desmarcar uma data retira todos os exames daquele dia do relatório. Abra a data para escolher exames individualmente. A seleção vale nesta sessão e não apaga o histórico.'));
+    var modeLabel=el('label','','Apresentação'),mode=el('select');[['dates','Por data'],['latest','Mais recente de cada exame']].forEach(function(a){var option=el('option','',a[1]);option.value=a[0];mode.appendChild(option);});mode.value=reportMode;mode.id='report-presentation';modeLabel.htmlFor=mode.id;details.appendChild(modeLabel);details.appendChild(mode);
+    var controls=el('div','row'),checks=[],dates=[],status=el('div','report-status');status.setAttribute('aria-live','polite');
+    function update(){reportExcluded[m.id]=checks.filter(function(a){return !a.input.checked;}).map(function(a){return a.id;});dates.forEach(function(d){var n=d.children.filter(function(c){return c.input.checked;}).length;d.input.checked=n===d.children.length;d.input.indeterminate=n>0&&n<d.children.length;d.count.textContent=n+'/'+d.children.length;});var pre=p.querySelector('pre');if(pre)pre.textContent=summary(m);status.textContent=(all.length-reportExcluded[m.id].length)+' de '+all.length+' resultados selecionados · '+reportExams(m).length+' no relatório';}
+    mode.onchange=function(){reportMode=mode.value;update();};
+    [['Marcar todos',true],['Desmarcar todos',false]].forEach(function(a){var b=el('button','sec',a[0]);b.onclick=function(){checks.forEach(function(c){c.input.checked=a[1];});update();};controls.appendChild(b);});details.appendChild(controls);
+    Array.from(new Set(all.map(function(x){return x.dt;}))).sort().reverse().forEach(function(date){
+      var group=el('div','report-date'),header=el('div','report-date-header'),lab=el('label'),master=el('input');master.type='checkbox';master.setAttribute('aria-label','Todos os exames de '+fd(date));lab.appendChild(master);lab.appendChild(el('b','',fd(date)));header.appendChild(lab);
+      var count=el('span','note'),expand=el('details');expand.appendChild(el('summary','','Escolher exames'));group.appendChild(header);header.appendChild(count);group.appendChild(expand);details.appendChild(group);var dateState={input:master,children:[],count:count};dates.push(dateState);
+      all.filter(function(x){return x.dt===date;}).forEach(function(x){var label=el('label'),input=el('input');input.type='checkbox';input.checked=excluded.indexOf(x.id)<0;label.appendChild(input);label.appendChild(el('span','',examCode(x)+' — '+x.n+': '+x.v+(x.u?' '+x.u:'')));expand.appendChild(label);var row={id:x.id,input:input};checks.push(row);dateState.children.push(row);input.onchange=update;});
+      master.onchange=function(){dateState.children.forEach(function(c){c.input.checked=master.checked;});update();};
+    });
+    p.appendChild(details);p.appendChild(status);update();
+  }
+
   function editExam(x){
     var m = cur();
     form((x ? 'Editar exame — ' : 'Novo resultado de exame — ')+m.name,
       [
         {k:'n',l:'Exame',req:1,p:'Ex.: Hemoglobina glicada',list:examNames()},
+        {k:'abbr',l:'Sigla no resumo (opcional)',p:'Ex.: HBA1C'},
         {k:'dt',l:'Data',t:'date',req:1,d:today()},
         {k:'v',l:'Resultado',req:1,p:'Ex.: 6.1'},
         {k:'u',l:'Unidade',p:'Ex.: %'},
@@ -1189,13 +1329,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
       var doc = [x.doc, x.spec].filter(Boolean).join(' - ');
       L.push('- ' + [x.n, x.dose, x.amount, x.f].filter(Boolean).join(' — ') + (x.s ? ' (desde ' + fd(x.s) + ')' : '') + (doc ? ' [' + doc + ']' : ''));
     });
-    L.push('', 'EXAMES (resultado mais recente de cada)');
-    var seen = {}, n = 0;
-    db.x.filter(function(x){ return x.mid === m.id; }).sort(byDate).forEach(function(x){
-      var k = norm(x.n); if((reportExcluded[m.id]||[]).indexOf(k)>=0||seen[k]) return; seen[k] = 1; n++;
-      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r + ')' : '') + ' — ' + fd(x.dt));
-    });
-    if(!n) L.push('- nenhum exame incluído neste relatório');
+    L.push('',reportMode==='latest'?'EXAMES (mais recente de cada selecionado)':'EXAMES POR DATA');
+    L=L.concat(examReportLines(m));
     L.push('', 'Atualizado em ' + fd(today()));
     return L.join('\n');
   }
@@ -1495,16 +1630,6 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     db.m.forEach(function(m,i){var row=el('div','card');row.appendChild(el('b','',m.name));[-1,1].forEach(function(dir){var b=el('button','link',dir<0?'Subir':'Descer');b.disabled=dir<0?i===0:i===db.m.length-1;b.onclick=function(){moveMember(m,dir);manageMembers();};row.appendChild(b);});s.appendChild(row);});
     var close=el('button','sec','Voltar');close.onclick=settings;s.appendChild(close);showM();
   }
-  function reportOptions(m,p){
-    var names=[],seen={};db.x.filter(function(x){return x.mid===m.id;}).sort(byDate).forEach(function(x){var k=norm(x.n);if(!seen[k]){seen[k]=true;names.push({key:k,name:x.n});}});
-    var excluded=reportExcluded[m.id]||[],details=el('details','report-options');details.appendChild(el('summary','','Selecionar exames do relatório'));
-    details.appendChild(el('p','note','Selecione os tipos de exame que deseja incluir. O relatório mostra o resultado mais recente de cada tipo. A seleção vale nesta sessão e não apaga o histórico.'));
-    var controls=el('div','row'),checks=[];
-    function update(){reportExcluded[m.id]=checks.filter(function(a){return !a.input.checked;}).map(function(a){return a.key;});p.querySelector('pre').textContent=summary(m);status.textContent=(names.length-reportExcluded[m.id].length)+' de '+names.length+' tipos de exame incluídos';}
-    [['Marcar todos',true],['Desmarcar todos',false]].forEach(function(a){var b=el('button','sec',a[0]);b.onclick=function(){checks.forEach(function(c){c.input.checked=a[1];});update();};controls.appendChild(b);});details.appendChild(controls);
-    names.forEach(function(n){var label=el('label'),input=el('input');input.type='checkbox';input.checked=excluded.indexOf(n.key)<0;label.appendChild(input);label.appendChild(el('span','',n.name));details.appendChild(label);checks.push({key:n.key,input:input});input.onchange=update;});
-    var status=el('div','report-status',(names.length-excluded.length)+' de '+names.length+' tipos de exame incluídos');status.setAttribute('aria-live','polite');p.appendChild(details);p.appendChild(status);
-  }
   function render(){
     checkBackupAlert();
 
@@ -1578,10 +1703,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     // ABA EXAMES
     if(tab === 'x'){
-      var a2 = el('button','pri','+ Resultado de exame');
+      var batch=el('button','pri','+ Exames por data');batch.onclick=function(){editExamBatch();};p.appendChild(batch);
+      var a2 = el('button','sec','+ Resultado de exame');a2.style.marginTop='8px';
       a2.onclick = function(){ editExam(); }; p.appendChild(a2);
       
       var all2 = db.x.filter(function(x){ return x.mid === m.id; });
+      if(all2.length){var byDay=el('details','date-edit-list');byDay.appendChild(el('summary','','Editar um conjunto por data'));Array.from(new Set(all2.map(function(x){return x.dt;}))).sort().reverse().forEach(function(date){var edit=el('button','sec','Editar exames de '+fd(date));edit.style.marginTop='8px';edit.onclick=function(){editExamBatch(date);};byDay.appendChild(edit);});p.appendChild(byDay);}
       if(all2.length){
         var s = el('input','q'); s.placeholder = 'Buscar exame'; s.value = q;
         s.oninput = function(){ q = s.value; list(); }; p.appendChild(s);
