@@ -478,7 +478,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.0</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.2</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -664,14 +664,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.0";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.2";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.0";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.2";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -1213,7 +1213,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
         var nl=el('label','','Nome do exame'),ni=el('input');ni.value=original?original.n:'';ni.placeholder='Ex.: PCR';nl.appendChild(ni);row.appendChild(nl);fields.name=ni;
         var al=el('label','','Sigla (opcional)'),ai=el('input');ai.value=original?(original.abbr||''):'';ai.placeholder='Ex.: PCR';al.appendChild(ai);row.appendChild(al);fields.abbr=ai;
       }
-      var line=el('div','batch-values'),vl=el('label','',custom?'Resultado':def.code+' — '+def.name),vi=el('input');vi.type='text';vi.placeholder='Resultado (opcional)';vi.value=original?original.v:'';vl.appendChild(vi);line.appendChild(vl);
+      var line=el('div','batch-values'),vl=el('label','',custom?'Resultado':def.code+' — '+def.name),vi=el('input');vi.type='text';vi.placeholder='Resultado';vi.value=original?original.v:'';vl.appendChild(vi);line.appendChild(vl);
       var ul=el('label','','Unidade (opcional)'),ui=el('input');ui.value=original?(original.u||''):'';ui.placeholder='Conforme o laudo';ul.appendChild(ui);line.appendChild(ul);row.appendChild(line);
       fields.value=vi;fields.unit=ui;fields.original=original;fields.def=def;
       if(original){var details=el('details');details.appendChild(el('summary','','Referência e observações'));[['r','Valor de referência'],['o','Observações']].forEach(function(a){var lab=el('label','',a[1]),inp=el('textarea');inp.rows=2;inp.value=original[a[0]]||'';lab.appendChild(inp);details.appendChild(lab);fields[a[0]]=inp;});row.appendChild(details);}
@@ -1503,7 +1503,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Tela de resultado da exportação: mostra o que foi gerado e diz com clareza o que aconteceu (nada de falha silenciosa). */
   function exportFileScreen(o){
-    var json=JSON.stringify(o,null,2), fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+o.backupCreatedAt.replace(/[:.]/g,'-')+'.json';
+    var created=new Date(o.backupCreatedAt);
+    var stamp=p2(created.getDate())+'-'+p2(created.getMonth()+1)+'-'+p2(created.getFullYear()%100)+'_'+p2(created.getHours())+'-'+p2(created.getMinutes())+'-'+p2(created.getSeconds());
+    var json=JSON.stringify(o,null,2), fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+stamp+'.json';
     var s=$('sheet'); s.innerHTML=''; s.appendChild(el('h2','','Exportar arquivo'));s.appendChild(el('p','note','Criado em '+new Date(o.backupCreatedAt).toLocaleString('pt-BR')+' · '+o.backupTimezone));
     s.appendChild(el('p','note',(o.parcial?'Arquivo PARCIAL com ':'Backup completo com ')+o.m.length+' familiar(es): '+o.m.map(function(m){return m.name;}).join(', ')+'.'));
     var st=el('div','note'); st.style.cssText='font-weight:600;min-height:1.4em;margin-top:10px';
