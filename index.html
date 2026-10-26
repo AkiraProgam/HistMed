@@ -463,7 +463,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.5</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.6</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -649,14 +649,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.5";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.6";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.5";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.6";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -1180,7 +1180,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   function summary(m){
     var L = ['FAMILIAR: ' + m.name];
-    if(m.history) L.push('Antecedentes pessoais e observações importantes: ' + m.history);
+    if(m.history) L.push('Ant. pess.: ' + m.history);
     if(m.o) L.push('Alergia(s): ' + m.o);
     L.push('', 'MEDICAMENTOS EM USO');
     var on = db.d.filter(function(x){ return x.mid === m.id && x.st === 'on'; });
@@ -1527,7 +1527,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     var h = el('div','head'), l = el('div');
     l.appendChild(el('b','',m.name));
-    if(m.history) l.appendChild(el('div','obs','Antecedentes pessoais e observações importantes: '+m.history));
+    if(m.history) l.appendChild(el('div','obs','Ant. pess.: '+m.history));
     if(m.o) l.appendChild(el('div','obs','Alergia(s): '+m.o));
     var e = el('button','link','Editar');
     e.onclick = function(){ editMember(m); };
