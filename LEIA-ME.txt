@@ -1,0 +1,40 @@
+SAÚDE DA FAMÍLIA — VERSÃO 7
+
+ATUALIZAÇÃO
+1. Exporte um backup no aplicativo atual antes de atualizar.
+2. Publique todos os arquivos desta pasta juntos, substituindo os arquivos da versão anterior.
+3. Mantenha o mesmo endereço, protocolo e navegador para continuar acessando os dados locais existentes.
+4. Abra o aplicativo com conexão à internet para receber a atualização. Depois disso, ele pode abrir offline.
+
+O aplicativo precisa ser servido por HTTPS (ou localhost em desenvolvimento) para instalação e funcionamento do service worker. Abrir index.html diretamente como arquivo não ativa esses recursos.
+
+RELATÓRIO PERSONALIZADO
+Na aba Resumo, abra “Selecionar exames do relatório”. Marque ou desmarque vários tipos de exame, ou use “Marcar todos” e “Desmarcar todos”.
+O resultado mais recente de cada tipo marcado aparece no relatório. A seleção vale para copiar, imprimir e salvar em PDF.
+Nenhum exame é apagado. A seleção é individual por familiar e vale enquanto a página está aberta; ao reabrir o aplicativo, todos voltam a ser incluídos.
+Medicamentos em uso e observações do familiar continuam no relatório.
+
+BACKUPS
+O arquivo JSON registra backupCreatedAt (data/hora em UTC), backupTimezone (fuso de criação) e backupVersion.
+O nome do arquivo inclui a data e a hora em UTC, identificadas pela letra Z.
+A tela de exportação apresenta a data e hora no fuso do dispositivo.
+Backups antigos continuam aceitos; não é possível recuperar sua data de criação se ela não estiver registrada.
+Os backups incluem todo o histórico dos familiares selecionados, independentemente dos exames ocultados no relatório.
+Abrir a tela de exportação de texto não registra mais um backup como realizado. Copiar o texto ou solicitar o download/compartilhamento atualiza o indicador de exportação. Ao copiar, guarde o texto em um arquivo ou outro local seguro.
+Os arquivos continuam sem criptografia e devem ser guardados em local seguro.
+
+OUTRAS MELHORIAS
+- Formulários permanecem abertos se a gravação falhar; os campos são preservados para nova tentativa.
+- Confirmação para descartar edições e para exclusões; opção Desfazer após excluir.
+- Restauração com ações explícitas para adicionar, substituir ou cancelar.
+- Identificação do familiar nos formulários de medicamentos e exames.
+- Campo separado para quantidade por tomada. Os registros antigos permanecem compatíveis.
+- Campos adicionais de medicamentos em “Mais detalhes”.
+- Ordenação de familiares em Configurações > Gerenciar familiares.
+- Áreas de toque maiores, contraste no modo escuro e melhorias de teclado e foco.
+- Gráficos com intervalos de tempo reais. Unidades diferentes impedem a exibição de uma série única.
+- Pacote completo com manifesto, ícones e service worker atualizado.
+
+VALIDAÇÃO
+Testado em Microsoft Edge automatizado, com tela de 390 x 844: cadastro de familiar, medicamento e exames; seleção múltipla do relatório e impressão; exportação e leitura do backup com data/hora; restauração; falha de armazenamento e nova tentativa; desfazer exclusão; gráfico; carregamento offline.
+A apresentação do relatório foi conferida em captura de tela. Recomenda-se conferir os fluxos no celular utilizado antes de substituir sua versão em uso.

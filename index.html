@@ -416,6 +416,31 @@ pre {
     background: transparent;
   }
 }
+
+/* Melhorias de leitura, foco e toque */
+[hidden]{display:none!important;}
+.toast{max-width:calc(100vw - 24px);border-radius:14px;}
+.toast button{margin-left:10px;border:1px solid currentColor;background:transparent;color:inherit;min-height:44px;border-radius:8px;padding:0 12px;}
+.more-details{margin-top:14px;}
+.more-details summary{cursor:pointer;min-height:44px;padding:10px 0;color:var(--ac);font-weight:600;}
+.ic,.link,.chip-btn,.chip-add,.pres button,.sug button { min-height:44px; }
+.mv button { width:44px;height:44px; }
+.note { font-size:14px; }
+.sheet label { font-size:15px; }
+.card.off { opacity:1; border-style:dashed; }
+.card.off b::before { content:'Suspenso · ';color:var(--bad); }
+.pri,.chip-item.on { color:#fff; }
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .pri,:root:not([data-theme="light"]) .chip-item.on{color:#082f2b;}}
+:root[data-theme="dark"] .pri,:root[data-theme="dark"] .chip-item.on{color:#082f2b;}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--ac);outline-offset:3px;}
+.report-options{border:1px solid var(--line);padding:12px;border-radius:12px;margin:12px 0;}
+.report-options label{display:flex;align-items:center;gap:10px;margin:8px 0;min-height:44px;}
+.report-options input{width:24px;height:24px;flex:none;margin:0;}
+.report-options summary{cursor:pointer;font-weight:600;min-height:44px;}
+.report-status{font-size:14px;color:var(--muted);margin:8px 0;}
+.sheet .row{position:sticky;bottom:0;background:var(--card);padding:10px 0;z-index:2;}
+.obs, .card { overflow-wrap:anywhere; }
+@media print{.report-options,.report-status,.screen-only{display:none!important;}}
 </style>
 </head>
 <body>
@@ -436,12 +461,13 @@ pre {
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
 </main>
 
-<div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
-<div class="toast" id="toast" hidden></div>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (function(){
   var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
+  var reportExcluded={}, modalDirty=false, previousFocus=null;
   var db=load();
   var base=JSON.parse(JSON.stringify(db));
 
@@ -483,9 +509,17 @@ pre {
         startMsg='Os dados salvos neste aparelho estavam ilegíveis e foram guardados à parte, sem apagar. Abra ⚙️ para ver cópias que podem ser recuperadas.';
       }
     }
-    return {schema:2,rev:0,m:[],d:[],x:[],sel:null,customMeds:[],hiddenMeds:[],lastBackup:Date.now(),fs:1};
+    return {schema:2,rev:0,m:[],d:[],x:[],sel:null,customMeds:[],hiddenMeds:[],lastBackup:0,fs:1};
   }
 
+  function captureDb(){return {value:clone(db),refs:{m:db.m.slice(),d:db.d.slice(),x:db.x.slice()}};}
+  function rollbackDb(before){
+    ['m','d','x'].forEach(function(key){before.value[key]=before.value[key].map(function(item){var original=before.refs[key].filter(function(r){return r.id===item.id;})[0];if(!original)return item;Object.keys(original).forEach(function(k){delete original[k];});Object.assign(original,item);return original;});});db=before.value;
+  }
+  function offerUndo(before){
+    var removed={};['m','d','x'].forEach(function(key){removed[key]=before.value[key].filter(function(item){return !db[key].some(function(r){return r.id===item.id;});});});
+    toast('Registro excluído.',10000);var b=el('button','','Desfazer');b.onclick=function(){var current=captureDb();['m','d','x'].forEach(function(key){removed[key].forEach(function(item){if(!db[key].some(function(r){return r.id===item.id;}))db[key].push(clone(item));});});if(!save()){rollbackDb(current);return;}render();toast('Exclusão desfeita.');};$('toast').appendChild(b);
+  }
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
   /* Fusão em 3 vias por id: base (último estado sincronizado), nossa lista e a lista gravada pela outra janela. */
   function mergeList(b,o,t){
@@ -553,21 +587,28 @@ pre {
   }
   
   var pushed=false;
-  function hideM(){$('modal').hidden=true;document.body.style.overflow='';if(pendingSync){pendingSync=false;setTimeout(syncFromStorage,0);}}
-  function closeM(){var w=pushed;hideM();if(w){pushed=false;try{history.back();}catch(e){}}}
-  function showM(){$('modal').hidden=false;document.body.style.overflow='hidden';if(!pushed){try{history.pushState({m:1},'');pushed=true;}catch(e){}}}
-  window.addEventListener('popstate',function(){if(!$('modal').hidden){pushed=false;hideM();}});
+  function hideM(){modalDirty=false;$('modal').hidden=true;if(previousFocus&&previousFocus.isConnected)previousFocus.focus();document.body.style.overflow='';if(pendingSync){pendingSync=false;setTimeout(syncFromStorage,0);}}
+  function closeM(){if(modalDirty&&!confirm('Descartar as alterações deste formulário?'))return;var w=pushed;hideM();if(w){pushed=false;try{history.back();}catch(e){}}}
+  function showM(){modalDirty=false;if($('modal').hidden)previousFocus=document.activeElement;$('modal').hidden=false;setTimeout(function(){var first=$('sheet').querySelector('input,textarea,select,button');(first||$('sheet')).focus();},0);document.body.style.overflow='hidden';if(!pushed){try{history.pushState({m:1},'');pushed=true;}catch(e){}}}
+  window.addEventListener('popstate',function(){if(!$('modal').hidden){pushed=false;if(modalDirty&&!confirm('Descartar as alterações deste formulário?')){history.pushState({m:1},'');pushed=true;return;}hideM();}});
+  $('sheet').addEventListener('input',function(){modalDirty=true;});
+  document.addEventListener('keydown',function(e){
+    if($('modal').hidden)return;
+    if(e.key==='Escape'){e.preventDefault();closeM();}
+    if(e.key==='Tab'){var a=Array.from($('sheet').querySelectorAll('button:not(:disabled),input:not(:disabled),textarea,select,[tabindex="0"]')).filter(function(x){return x.getClientRects().length;});if(!a.length){e.preventDefault();return;}var first=a[0],last=a[a.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
+  });
+  window.addEventListener('beforeunload',function(e){if(modalDirty){e.preventDefault();e.returnValue='';}});
   function applyFs(){document.body.style.zoom=(db.fs&&db.fs>1)?db.fs:'';}
   
-  function copy(t){
+  function copy(t,onCopied){
     function fb(){
       var a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';
       document.body.appendChild(a);a.select();
-      try{document.execCommand('copy');toast('Copiado');}catch(e){toast('Não foi possível copiar');}
+      try{if(!document.execCommand('copy'))throw Error('copy');toast('Copiado');if(onCopied)onCopied();}catch(e){toast('Não foi possível copiar');}
       document.body.removeChild(a);
     }
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(t).then(function(){toast('Copiado');},fb);
+      navigator.clipboard.writeText(t).then(function(){toast('Copiado');if(onCopied)onCopied();},fb);
     }else fb();
   }
 
@@ -582,30 +623,35 @@ pre {
     var resumo=o.m.length+' familiar(es), '+o.d.length+' remédio(s), '+o.x.length+' exame(s)';
     var temDados=db.m.length||db.d.length||db.x.length, merge=false;
     if(temDados && !soSubstituir){
-      if(confirm('Este backup tem '+resumo+'.\n\nJá existem dados neste aparelho.\n\nOK = ADICIONAR o conteúdo do backup aos dados atuais (nada é apagado; registros com o mesmo código são atualizados).\nCancelar = ver a opção de substituir.')) merge=true;
-      else if(!confirm('Substituir TODOS os dados atuais por este backup ('+resumo+')?\n\nUma cópia dos dados atuais fica guardada para você poder desfazer.')) return false;
-    } else if(!confirm('Restaurar este backup ('+resumo+')?'+(temDados?'\n\nIsto SUBSTITUI todos os dados atuais. Uma cópia dos dados atuais fica guardada para você poder desfazer.':''))) return false;
-    try{localStorage.setItem(KEY+'_antes_restauro',JSON.stringify(db));}catch(x){}
+      var sheet=$('sheet');sheet.innerHTML='';sheet.appendChild(el('h2','','Restaurar backup'));
+      sheet.appendChild(el('p','',resumo+(o.backupCreatedAt?' · Criado em '+new Date(o.backupCreatedAt).toLocaleString('pt-BR'):'')));
+      [['Adicionar ao que já existe','merge'],['Substituir tudo','replace'],['Cancelar','cancel']].forEach(function(opt){var b=el('button','sec',opt[0]);b.style.marginTop='10px';b.onclick=function(){if(opt[1]==='cancel'){settings();return;}if(opt[1]==='replace'&&!confirm('Substituir todos os dados atuais por este backup?'))return;processBackupObject(o,opt[1]);};sheet.appendChild(b);});showM();return false;
+    }
+    merge=soSubstituir==='merge';
+    if(!temDados&&!confirm('Restaurar '+resumo+'?'))return false;
+    if(soSubstituir===true&&!confirm('Substituir os dados atuais por esta cópia?'))return false;
+    var beforeRestore=captureDb();
+    try{localStorage.setItem(KEY+'_antes_restauro',JSON.stringify(db));}catch(x){toast('Não foi possível guardar uma cópia de segurança. A restauração foi cancelada.',6000);return false;}
     if(merge){
       db.m=mergeById(db.m,o.m); db.d=mergeById(db.d,o.d); db.x=mergeById(db.x,o.x);
       (Array.isArray(o.customMeds)?o.customMeds:[]).forEach(function(n){ if(isStr(n) && (db.customMeds||[]).indexOf(n)<0) db.customMeds.push(n); });
       if(!db.sel && db.m.length) db.sel=db.m[0].id;
-      save();
-    } else { db=fixDb(o); db.lastBackup=Date.now(); save(true); }
-    applyFs(); closeM(); render();
+      if(!save()){rollbackDb(beforeRestore);return false;}
+    } else { db=fixDb(o); db.lastBackup=o.lastBackup||0; if(!save(true)){rollbackDb(beforeRestore);return false;} }
+    modalDirty=false;applyFs(); closeM(); render();
     toast(merge?'Backup adicionado aos dados atuais.':'Backup restaurado com sucesso!'); return true;
   }
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length) return clone(db);
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion=7;return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion=7;return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -643,6 +689,7 @@ pre {
       ins[f.k]=i;l.appendChild(i);s.appendChild(l);
     });
     if(hook)hook(ins);
+    if(ins.doc&&ins.spec){var more=el('details','more-details');more.appendChild(el('summary','','Mais detalhes'));['doc','spec','s','o'].forEach(function(k){if(ins[k]){if(ins[k].value)more.open=true;more.appendChild(ins[k].closest('label'));}});s.appendChild(more);}
     var err=el('div','err');s.appendChild(err);
     var row=el('div','row'),c=el('button','sec','Cancelar'),ok=el('button','pri','Salvar');
     c.onclick=closeM;
@@ -653,14 +700,14 @@ pre {
         o[f.k]=ins[f.k].value.trim();
         if(f.req&&!o[f.k]){err.textContent='Preencha: '+f.l;ins[f.k].focus();return;}
       }
-      onSave(o);closeM();save();render();
+      var before=captureDb();onSave(o);if(!save()){rollbackDb(before);return;}modalDirty=false;closeM();render();
     };
     row.appendChild(c);row.appendChild(ok);s.appendChild(row);
     if(onDel){
       var d=el('button','del','Excluir'),a=false;
       d.onclick=function(){
-        if(!a){a=true;d.textContent=delTxt||'Toque de novo para excluir';return;}
-        onDel();closeM();save();render();
+        if(!confirm(delTxt||'Excluir este registro?'))return;
+        var before=captureDb();onDel();if(!save()){rollbackDb(before);return;}modalDirty=false;closeM();render();offerUndo(before);
       };
       s.appendChild(d);
     }
@@ -680,7 +727,7 @@ pre {
         db.m=db.m.filter(function(x){return x.id!==m.id;});
         db.sel=db.m.length?db.m[0].id:null;
       }:null,
-      'Excluir familiar e todos os dados: toque de novo');
+      m ? 'Excluir '+m.name+', '+db.d.filter(function(x){return x.mid===m.id;}).length+' medicamento(s) e '+db.x.filter(function(x){return x.mid===m.id;}).length+' exame(s)?' : '');
   }
 
   // Base Expandida RENAME (Atenção Básica e Especializada + Uso Frequente)
@@ -880,7 +927,7 @@ pre {
     if(/\d\s*\/\s*\d|[<>≤≥]/.test(t))return NaN;
     var m=t.match(/^(-?\d[\d.,]*)\s*[^\d.,\-]*$/);if(!m)return NaN;t=m[1];
     if(/^-?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(t)||t.indexOf(',')>=0)t=t.replace(/\./g,'').replace(',','.');
-    var n=parseFloat(t);return isFinite(n)?n:NaN;
+    if(!/^-?\d+(\.\d+)?$/.test(t))return NaN;var n=Number(t);return isFinite(n)?n:NaN;
   }
   var COMMON_EXAMS=['Hemoglobina glicada (HbA1c)','Glicemia de jejum','Colesterol total','LDL','HDL','Triglicerídeos','Creatinina','TFG','Ureia','Ácido úrico','TSH','T4 livre','Hemoglobina','Hematócrito','Leucócitos','Plaquetas','Ferritina','Vitamina D (25-OH)','Vitamina B12','TGO (AST)','TGP (ALT)','GGT','PCR','VHS','PSA total','Sódio','Potássio','Cálcio','Pressão arterial'];
   function examNames(){var seen={},out=[];db.x.map(function(x){return x.n;}).concat(COMMON_EXAMS).forEach(function(n){var k=norm(n);if(!seen[k]){seen[k]=1;out.push(n);}});return out;}
@@ -1010,7 +1057,7 @@ pre {
         }
 
         // Mudar para mousedown para acionar antes da perda de foco no celular
-        b.addEventListener('mousedown', function(e){
+        b.addEventListener('click', function(e){
           e.preventDefault();
           selectMed(i);
         });
@@ -1039,11 +1086,12 @@ pre {
 
   function editMed(x){
     var m = cur();
-    form(x ? 'Editar medicamento' : 'Novo medicamento',
+    form((x ? 'Editar medicamento — ' : 'Novo medicamento — ')+m.name,
       [
         {k:'n',l:'Medicamento',req:1,p:'Ex.: Losartana'},
-        {k:'dose',l:'Dose',p:'Ex.: 50 mg'},
-        {k:'f',l:'Como toma',p:'Ex.: 1 comprimido de manhã'},
+        {k:'dose',l:'Concentração / apresentação',p:'Ex.: 50 mg por comprimido'},
+        {k:'amount',l:'Quantidade por tomada (opcional)',p:'Ex.: 1 comprimido'},
+        {k:'f',l:'Horários / modo de uso',p:'Ex.: de manhã; registros antigos podem incluir a quantidade'},
         {k:'doc',l:'Médico prescritor (opcional)',p:'Ex.: Dr. Silva'},
         {k:'spec',l:'Especialidade (opcional)',p:'Ex.: Cardiologia'},
         {k:'s',l:'Início (opcional)',t:'date'},
@@ -1063,7 +1111,7 @@ pre {
 
   function editExam(x){
     var m = cur();
-    form(x ? 'Editar exame' : 'Novo resultado de exame',
+    form((x ? 'Editar exame — ' : 'Novo resultado de exame — ')+m.name,
       [
         {k:'n',l:'Exame',req:1,p:'Ex.: Hemoglobina glicada',list:examNames()},
         {k:'dt',l:'Data',t:'date',req:1,d:today()},
@@ -1096,7 +1144,7 @@ pre {
       d.onclick = function(e){ e.stopPropagation(); mv.dn(); };
       w.appendChild(u); w.appendChild(d); c.appendChild(w);
     }
-    c.onclick = fn; return c;
+    g.tabIndex=0;g.setAttribute('role','button');g.setAttribute('aria-label','Editar '+t);g.onclick=function(e){if(e.target.closest('button'))return;e.stopPropagation();fn();};g.onkeydown=function(e){if(e.target!==g)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}};c.onclick=fn; return c;
   }
 
   function byDate(a,b){ return a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : 0; }
@@ -1114,15 +1162,15 @@ pre {
     if(!on.length) L.push('- nenhum registrado');
     on.forEach(function(x){
       var doc = [x.doc, x.spec].filter(Boolean).join(' - ');
-      L.push('- ' + [x.n, x.dose, x.f].filter(Boolean).join(' — ') + (x.s ? ' (desde ' + fd(x.s) + ')' : '') + (doc ? ' [' + doc + ']' : ''));
+      L.push('- ' + [x.n, x.dose, x.amount, x.f].filter(Boolean).join(' — ') + (x.s ? ' (desde ' + fd(x.s) + ')' : '') + (doc ? ' [' + doc + ']' : ''));
     });
     L.push('', 'EXAMES (resultado mais recente de cada)');
     var seen = {}, n = 0;
     db.x.filter(function(x){ return x.mid === m.id; }).sort(byDate).forEach(function(x){
-      var k = norm(x.n); if(seen[k]) return; seen[k] = 1; n++;
+      var k = norm(x.n); if((reportExcluded[m.id]||[]).indexOf(k)>=0||seen[k]) return; seen[k] = 1; n++;
       L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r + ')' : '') + ' — ' + fd(x.dt));
     });
-    if(!n) L.push('- nenhum registrado');
+    if(!n) L.push('- nenhum exame incluído neste relatório');
     L.push('', 'Atualizado em ' + fd(today()));
     return L.join('\n');
   }
@@ -1152,7 +1200,7 @@ pre {
     tHead.appendChild(closeBtn);
     box.appendChild(tHead);
     var us = {}; points.forEach(function(p){ us[(p.orig.u || '').trim().toLowerCase()] = 1; });
-    if(Object.keys(us).length > 1) box.appendChild(el('div','note','⚠️ Este exame aparece com unidades diferentes; compare com cuidado.'));
+    if(Object.keys(us).length > 1){box.appendChild(el('div','note','Este exame tem unidades diferentes. O gráfico não é exibido para evitar uma comparação incorreta. Padronize as unidades conforme os laudos.'));return box;}
 
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
@@ -1177,8 +1225,9 @@ pre {
       svg.appendChild(line);
     }
 
+    var firstTime=Date.parse(points[0].dt),lastTime=Date.parse(points[points.length-1].dt);
     var coords = points.map(function(p, i){
-      var cx = xOff + (points.length === 1 ? W/2 : (i / (points.length - 1)) * W);
+      var cx = xOff + (firstTime===lastTime ? W/2 : ((Date.parse(p.dt)-firstTime)/(lastTime-firstTime))*W);
       var cy = yOff + H - ((p.v - minV) / (maxV - minV)) * H;
       return { x: cx, y: cy, p: p };
     });
@@ -1196,7 +1245,8 @@ pre {
       circle.setAttribute("cx", c.x); circle.setAttribute("cy", c.y);
       circle.setAttribute("r", "5");
       circle.setAttribute("fill", "var(--ac)");
-      svg.appendChild(circle);
+      var tip=document.createElementNS(svgNS,'title');tip.textContent=fd(c.p.dt)+': '+c.p.v+' '+lu;circle.appendChild(tip);svg.appendChild(circle);
+      if(points.length>6&&c!==coords[0]&&c!==coords[coords.length-1])return;
 
       var textVal = document.createElementNS(svgNS, "text");
       textVal.setAttribute("x", c.x); textVal.setAttribute("y", c.y - 8);
@@ -1226,9 +1276,9 @@ pre {
     var last = db.lastBackup || 0;
     var days = (Date.now() - last) / (1000 * 60 * 60 * 24);
     
-    if(days > 30){
+    if(db.m.length && (!last || days > 30)){
       var warn = el('div', 'backup-alert');
-      warn.appendChild(el('span', '', '⚠️ Faz mais de 30 dias que não faz backup dos seus dados.'));
+      warn.appendChild(el('span', '', !last?'Nenhum backup exportado ainda.':'Faz mais de 30 dias que não exporta um backup.'));
       var b = el('button', '', 'Fazer backup');
       b.onclick = settings;
       warn.appendChild(b);
@@ -1293,8 +1343,8 @@ pre {
 
   /* Tela de resultado da exportação: mostra o que foi gerado e diz com clareza o que aconteceu (nada de falha silenciosa). */
   function exportFileScreen(o){
-    var json=JSON.stringify(o,null,2), fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+today()+'.json';
-    var s=$('sheet'); s.innerHTML=''; s.appendChild(el('h2','','Exportar arquivo'));
+    var json=JSON.stringify(o,null,2), fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+o.backupCreatedAt.replace(/[:.]/g,'-')+'.json';
+    var s=$('sheet'); s.innerHTML=''; s.appendChild(el('h2','','Exportar arquivo'));s.appendChild(el('p','note','Criado em '+new Date(o.backupCreatedAt).toLocaleString('pt-BR')+' · '+o.backupTimezone));
     s.appendChild(el('p','note',(o.parcial?'Arquivo PARCIAL com ':'Backup completo com ')+o.m.length+' familiar(es): '+o.m.map(function(m){return m.name;}).join(', ')+'.'));
     var st=el('div','note'); st.style.cssText='font-weight:600;min-height:1.4em;margin-top:10px';
     function done(msg){ if(!o.parcial){ db.lastBackup=Date.now(); save(); } st.textContent=msg; }
@@ -1315,8 +1365,8 @@ pre {
     }
     var b1=el('button','pri','📤 Compartilhar'), b2=el('button','pri','⬇️ Baixar arquivo'), b3=el('button','sec','📋 Copiar como texto'), b4=el('button','sec','Voltar');
     [b1,b2,b3,b4].forEach(function(b){ b.style.marginTop='8px'; });
-    b1.onclick=share; b2.onclick=download; b4.onclick=settings;
-    b3.onclick=function(){ copy(json); done('✅ Texto copiado: cole onde quiser guardar ou enviar.'); };
+    b1.onclick=share; b2.onclick=download; b4.onclick=function(){modalDirty=false;settings();};
+    b3.onclick=function(){copy(json,function(){done('Texto copiado. Cole em um arquivo e guarde em local seguro.');});};
     if(navigator.share) s.appendChild(b1);
     s.appendChild(b2); s.appendChild(b3); s.appendChild(st); s.appendChild(b4);
     showM();
@@ -1326,6 +1376,7 @@ pre {
     var s = $('sheet'); s.innerHTML = '';
     s.appendChild(el('h2', '', '⚙️ Configurações & Backup'));
 
+    var manage=el('button','sec','Gerenciar familiares');manage.onclick=manageMembers;s.appendChild(manage);
     var secBackup = el('div');
     secBackup.appendChild(el('h3', '', 'Backup e Restauração'));
 
@@ -1333,11 +1384,10 @@ pre {
     var btnExpText = el('button', 'pri', 'Exportar Texto');
     btnExpText.onclick = function(){ chooseMembers('Exportar texto: quem incluir?', function(ids){
       var o=exportable(ids), json=JSON.stringify(o,null,2);
-      if(!o.parcial){ db.lastBackup=Date.now(); save(); }
       var s2=$('sheet'); s2.innerHTML=''; s2.appendChild(el('h2','','Exportar texto'));
       s2.appendChild(el('p','note',(o.parcial?'Backup PARCIAL ('+o.m.length+' familiar(es)). ':'')+'Copie o código JSON abaixo para guardar em local seguro:'));
       var ta=el('textarea'); ta.rows=8; ta.value=json; s2.appendChild(ta);
-      var bc=el('button','pri','Copiar JSON'); bc.style.marginTop='8px'; bc.onclick=function(){ copy(json); }; s2.appendChild(bc);
+      var bc=el('button','pri','Copiar JSON'); bc.style.marginTop='8px'; bc.onclick=function(){copy(json,function(){if(!o.parcial){db.lastBackup=Date.now();save();}toast('Texto copiado. Guarde em local seguro.',4000);});}; s2.appendChild(bc);
       var bb=el('button','sec','Voltar'); bb.style.marginTop='8px'; bb.onclick=settings; s2.appendChild(bb);
     }); };
 
@@ -1415,6 +1465,21 @@ pre {
     showM();
   }
 
+  function manageMembers(){
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Gerenciar familiares'));
+    db.m.forEach(function(m,i){var row=el('div','card');row.appendChild(el('b','',m.name));[-1,1].forEach(function(dir){var b=el('button','link',dir<0?'Subir':'Descer');b.disabled=dir<0?i===0:i===db.m.length-1;b.onclick=function(){moveMember(m,dir);manageMembers();};row.appendChild(b);});s.appendChild(row);});
+    var close=el('button','sec','Voltar');close.onclick=settings;s.appendChild(close);showM();
+  }
+  function reportOptions(m,p){
+    var names=[],seen={};db.x.filter(function(x){return x.mid===m.id;}).sort(byDate).forEach(function(x){var k=norm(x.n);if(!seen[k]){seen[k]=true;names.push({key:k,name:x.n});}});
+    var excluded=reportExcluded[m.id]||[],details=el('details','report-options');details.appendChild(el('summary','','Selecionar exames do relatório'));
+    details.appendChild(el('p','note','Selecione os tipos de exame que deseja incluir. O relatório mostra o resultado mais recente de cada tipo. A seleção vale nesta sessão e não apaga o histórico.'));
+    var controls=el('div','row'),checks=[];
+    function update(){reportExcluded[m.id]=checks.filter(function(a){return !a.input.checked;}).map(function(a){return a.key;});p.querySelector('pre').textContent=summary(m);status.textContent=(names.length-reportExcluded[m.id].length)+' de '+names.length+' tipos de exame incluídos';}
+    [['Marcar todos',true],['Desmarcar todos',false]].forEach(function(a){var b=el('button','sec',a[0]);b.onclick=function(){checks.forEach(function(c){c.input.checked=a[1];});update();};controls.appendChild(b);});details.appendChild(controls);
+    names.forEach(function(n){var label=el('label'),input=el('input');input.type='checkbox';input.checked=excluded.indexOf(n.key)<0;label.appendChild(input);label.appendChild(el('span','',n.name));details.appendChild(label);checks.push({key:n.key,input:input});input.onchange=update;});
+    var status=el('div','report-status',(names.length-excluded.length)+' de '+names.length+' tipos de exame incluídos');status.setAttribute('aria-live','polite');p.appendChild(details);p.appendChild(status);
+  }
   function render(){
     checkBackupAlert();
 
@@ -1422,20 +1487,8 @@ pre {
     db.m.forEach(function(m, idx){
       var item = el('div', 'chip-item' + (m.id === db.sel ? ' on' : ''));
       
-      var bPrev = el('button', 'chip-mv', '◀');
-      bPrev.disabled = idx === 0;
-      bPrev.onclick = function(e){ e.stopPropagation(); moveMember(m, -1); };
-      item.appendChild(bPrev);
-
-      var bName = el('button', 'chip-btn', m.name);
-      bName.onclick = function(){ db.sel = m.id; q = ''; selectedExamName = ''; save(); render(); };
-      item.appendChild(bName);
-
-      var bNext = el('button', 'chip-mv', '▶');
-      bNext.disabled = idx === db.m.length - 1;
-      bNext.onclick = function(e){ e.stopPropagation(); moveMember(m, 1); };
-      item.appendChild(bNext);
-
+      var bName=el('button','chip-btn',m.name);bName.setAttribute('aria-pressed',String(m.id===db.sel));
+      bName.onclick=function(){db.sel=m.id;q='';selectedExamName='';save();render();};item.appendChild(bName);
       ch.appendChild(item);
     });
 
@@ -1484,7 +1537,7 @@ pre {
       on.forEach(function(x,i){
         var docInfo = [x.doc, x.spec].filter(Boolean).join(' - ');
         if(docInfo) docInfo = '👨‍⚕️ ' + docInfo;
-        p.appendChild(card((i+1) + '. ' + x.n, [x.dose, x.f].filter(Boolean).join(' · '), (x.s ? 'Desde ' + fd(x.s) : '') + (x.o ? (x.s ? ' · ' : '') + x.o : ''), docInfo, function(){ editMed(x); }, 0, mvb(on,x)));
+        p.appendChild(card((i+1) + '. ' + x.n, [x.dose, x.amount, x.f].filter(Boolean).join(' · '), (x.s ? 'Desde ' + fd(x.s) : '') + (x.o ? (x.s ? ' · ' : '') + x.o : ''), docInfo, function(){ editMed(x); }, 0, mvb(on,x)));
       });
 
       if(off.length){
@@ -1492,7 +1545,7 @@ pre {
         off.forEach(function(x){
           var docInfo = [x.doc, x.spec].filter(Boolean).join(' - ');
           if(docInfo) docInfo = '👨‍⚕️ ' + docInfo;
-          p.appendChild(card(x.n, [x.dose, x.f].filter(Boolean).join(' · '), x.o || '', docInfo, function(){ editMed(x); }, 1, mvb(off,x)));
+          p.appendChild(card(x.n, [x.dose, x.amount, x.f].filter(Boolean).join(' · '), x.o || '', docInfo, function(){ editMed(x); }, 1, mvb(off,x)));
         });
       }
     }
@@ -1551,6 +1604,7 @@ pre {
 
     // ABA RESUMO
     if(tab === 'r'){
+      reportOptions(m,p);
       p.appendChild(el('pre','',summary(m)));
       
       var rowBtns = el('div','row');
@@ -1591,7 +1645,7 @@ pre {
   if(!db.sel && db.m.length) db.sel = db.m[0].id;
   applyFs();
   render();
-  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){}
   if(startMsg) setTimeout(function(){ alert(startMsg); }, 300);
 
   // Registro do Service Worker para suporte a PWA Offline
