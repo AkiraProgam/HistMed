@@ -459,6 +459,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.1</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -644,14 +645,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion=7;return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.1";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion=7;return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.1";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }

@@ -1,4 +1,4 @@
-SAÚDE DA FAMÍLIA — VERSÃO 7
+SAÚDE DA FAMÍLIA — VERSÃO 7.1
 
 ATUALIZAÇÃO
 1. Exporte um backup no aplicativo atual antes de atualizar.
@@ -38,3 +38,5 @@ OUTRAS MELHORIAS
 VALIDAÇÃO
 Testado em Microsoft Edge automatizado, com tela de 390 x 844: cadastro de familiar, medicamento e exames; seleção múltipla do relatório e impressão; exportação e leitura do backup com data/hora; restauração; falha de armazenamento e nova tentativa; desfazer exclusão; gráfico; carregamento offline.
 A apresentação do relatório foi conferida em captura de tela. Recomenda-se conferir os fluxos no celular utilizado antes de substituir sua versão em uso.
+
+VERSÃO 7.1: identificação da versão no rodapé do aplicativo (não aparece no relatório impresso).
