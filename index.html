@@ -463,7 +463,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.3</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 7.4</footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -649,14 +649,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.3";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="7.4";return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.3";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="7.4";return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -721,10 +721,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   function editMember(m){
     form(m?'Editar familiar':'Novo familiar',
-      [{k:'name',l:'Nome',req:1,p:'Ex.: Mãe'},{k:'o',l:'Alergias e observações importantes',t:'area',p:'Ex.: alergia a dipirona'}],
+      [{k:'name',l:'Nome',req:1,p:'Ex.: Mãe'},{k:'o',l:'Alergias e observações importantes',t:'area',p:'Ex.: alergia a dipirona'},{k:'history',l:'Antecedentes pessoais (opcional)',t:'area',p:'Ex.: Doença de Parkinson, HAS, DM2'}],
       m,function(o){
-        if(m){m.name=o.name;m.o=o.o;}
-        else{var n={id:uid(),name:o.name,o:o.o};db.m.push(n);db.sel=n.id;tab='d';}
+        if(m){m.name=o.name;m.o=o.o;m.history=o.history;}
+        else{var n={id:uid(),name:o.name,o:o.o,history:o.history};db.m.push(n);db.sel=n.id;tab='d';}
       },
       m?function(){
         db.d=db.d.filter(function(x){return x.mid!==m.id;});
@@ -1181,6 +1181,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   function summary(m){
     var L = ['FAMILIAR: ' + m.name];
     if(m.o) L.push('Alergias/observações: ' + m.o);
+    if(m.history) L.push('Antecedentes pessoais: ' + m.history);
     L.push('', 'MEDICAMENTOS EM USO');
     var on = db.d.filter(function(x){ return x.mid === m.id && x.st === 'on'; });
     if(!on.length) L.push('- nenhum registrado');
@@ -1526,7 +1527,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     var h = el('div','head'), l = el('div');
     l.appendChild(el('b','',m.name));
-    if(m.o) l.appendChild(el('div','obs',m.o));
+    if(m.o) l.appendChild(el('div','obs','Alergias/observações: '+m.o));
+    if(m.history) l.appendChild(el('div','obs','Antecedentes pessoais: '+m.history));
     var e = el('button','link','Editar');
     e.onclick = function(){ editMember(m); };
     h.appendChild(l); h.appendChild(e); p.appendChild(h);
