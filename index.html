@@ -12,8 +12,8 @@
 
 <!-- Vínculo com o Web App Manifest -->
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/svg+xml" href="icon-192.svg">
-<link rel="apple-touch-icon" href="icon-192.svg">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <style>
 :root {
@@ -126,8 +126,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border: 0;
   color: inherit;
   opacity: 0.7;
-  padding: 4px 3px;
-  font-size: 11px;
+  padding: 10px 9px;
+  font-size: 13px;
 }
 .chip-mv:disabled { opacity: 0.2; }
 .chip-add {
@@ -443,40 +443,121 @@ pre {
 (function(){
   var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
   var db=load();
+  var base=JSON.parse(JSON.stringify(db));
 
   function $(i){return document.getElementById(i);}
   function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
   function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
   
-  function load(){
+  var startMsg; /* definido em load(), que roda antes desta linha */
+  function isStr(v){return typeof v==='string';}
+  function valid(o){
+    return !!o&&typeof o==='object'&&Array.isArray(o.m)&&Array.isArray(o.d)&&Array.isArray(o.x)
+      &&o.m.every(function(a){return a&&isStr(a.id)&&isStr(a.name);})
+      &&o.d.every(function(a){return a&&isStr(a.id)&&isStr(a.mid)&&isStr(a.n);})
+      &&o.x.every(function(a){return a&&isStr(a.id)&&isStr(a.mid)&&isStr(a.n)&&isStr(a.v)&&isStr(a.dt);});
+  }
+  function fixDb(o){
+    o.schema=2; o.rev=o.rev||0;
+    o.hiddenMeds=Array.isArray(o.hiddenMeds)?o.hiddenMeds.filter(isStr):[];
+    o.customMeds=Array.isArray(o.customMeds)?o.customMeds.filter(isStr):[];
+    if(!o.lastBackup)o.lastBackup=0;
+    if(!o.m.some(function(x){return x.id===o.sel;}))o.sel=o.m.length?o.m[0].id:null;
+    return o;
+  }
+  function rotateSnap(raw){
     try{
-      var s=localStorage.getItem(KEY);
-      if(s){
-        var o=JSON.parse(s);
-        if(o&&o.m&&o.d&&o.x) {
-          if(!o.customMeds) o.customMeds = [];
-          return o;
-        }
-      }
+      var d=today();if(localStorage.getItem(KEY+'_snapd')===d)return;
+      localStorage.setItem(KEY+'_snap2',localStorage.getItem(KEY+'_snap1')||raw);
+      localStorage.setItem(KEY+'_snap1',raw);localStorage.setItem(KEY+'_snapd',d);
     }catch(e){}
-    return {m:[], d:[], x:[], sel:null, customMeds:[], lastBackup: Date.now()};
+  }
+  function load(){
+    var s=null;
+    try{
+      s=localStorage.getItem(KEY);
+      if(s){var o=JSON.parse(s);if(valid(o)){rotateSnap(s);return fixDb(o);}throw new Error('formato');}
+    }catch(e){
+      if(s){
+        try{localStorage.setItem(KEY+'_corrompido',s);}catch(e2){}
+        startMsg='Os dados salvos neste aparelho estavam ilegíveis e foram guardados à parte, sem apagar. Abra ⚙️ para ver cópias que podem ser recuperadas.';
+      }
+    }
+    return {schema:2,rev:0,m:[],d:[],x:[],sel:null,customMeds:[],hiddenMeds:[],lastBackup:Date.now(),fs:1};
   }
 
-  function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){}
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  /* Fusão em 3 vias por id: base (último estado sincronizado), nossa lista e a lista gravada pela outra janela. */
+  function mergeList(b,o,t){
+    var bm={},tm={},used={},out=[];
+    b.forEach(function(r){ bm[r.id] = JSON.stringify(r); });
+    t.forEach(function(r){ tm[r.id] = r; });
+    o.forEach(function(r){
+      var id = r.id, mine = JSON.stringify(r);
+      if(id in bm && !(id in tm) && mine === bm[id]) return;          /* a outra janela apagou e nós não mexemos */
+      out.push((id in bm && id in tm && mine === bm[id]) ? tm[id] : r); /* sem mudança nossa: vale a versão da outra janela */
+      used[id] = 1;
+    });
+    t.forEach(function(r){ if(!used[r.id] && !(r.id in bm)) out.push(r); }); /* novos da outra janela */
+    return out;
   }
+  function mergeStr(b,o,t){
+    var out = o.filter(function(x){ return !(b.indexOf(x) >= 0 && t.indexOf(x) < 0); });
+    t.forEach(function(x){ if(out.indexOf(x) < 0 && b.indexOf(x) < 0 && o.indexOf(x) < 0) out.push(x); });
+    return out;
+  }
+  function save(force){
+    var merged = false;
+    try{
+      var st = null;
+      try{ var raw = localStorage.getItem(KEY); st = raw ? JSON.parse(raw) : null; }catch(e){}
+      if(st && valid(st)){
+        if(!force && (st.rev || 0) !== (base.rev || 0)){
+          db.m = mergeList(base.m, db.m, st.m); db.d = mergeList(base.d, db.d, st.d); db.x = mergeList(base.x, db.x, st.x);
+          db.customMeds = mergeStr(base.customMeds || [], db.customMeds || [], Array.isArray(st.customMeds) ? st.customMeds : []);
+          db.hiddenMeds = mergeStr(base.hiddenMeds || [], db.hiddenMeds || [], Array.isArray(st.hiddenMeds) ? st.hiddenMeds : []);
+          db.lastBackup = Math.max(db.lastBackup || 0, st.lastBackup || 0);
+          if(!db.m.some(function(x){ return x.id === db.sel; })) db.sel = db.m.length ? db.m[0].id : null;
+          merged = true;
+        }
+        db.rev = Math.max(db.rev || 0, st.rev || 0);
+      }
+      db.rev = (db.rev || 0) + 1;
+      localStorage.setItem(KEY, JSON.stringify(db));
+      base = clone(db);
+      if(merged) toast('Alterações feitas em outra janela foram combinadas com as suas.', 4000);
+      return true;
+    }catch(e){ toast('ATENÇÃO: não foi possível salvar neste aparelho. Faça um backup agora (⚙️).',6000); return false; }
+  }
+  var pendingSync = false;
+  function syncFromStorage(){
+    var st = null;
+    try{ var raw = localStorage.getItem(KEY); st = raw ? JSON.parse(raw) : null; }catch(e){ return; }
+    if(!st || !valid(st) || (st.rev || 0) <= (db.rev || 0)) return;
+    if(!$('modal').hidden){ pendingSync = true; return; }   /* não mexe na tela enquanto há formulário aberto */
+    db = fixDb(st); base = clone(db); applyFs(); render();
+    toast('Dados atualizados: houve alterações em outra janela.', 3500);
+  }
+  window.addEventListener('storage', function(e){ if(e.key === KEY) syncFromStorage(); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) syncFromStorage(); });
+  window.addEventListener('focus', syncFromStorage);
 
   function p2(n){return n<10?'0'+n:''+n;}
   function today(){var d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
   function fd(i){return i?i.split('-').reverse().join('/'):'';}
   function cur(){return db.m.filter(function(m){return m.id===db.sel;})[0]||null;}
   
-  function toast(t){
+  function toast(t,ms){
     var e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(tt);
-    tt=setTimeout(function(){e.hidden=true;},2200);
+    tt=setTimeout(function(){e.hidden=true;},ms||2200);
   }
   
-  function closeM(){$('modal').hidden=true;document.body.style.overflow='';}
+  var pushed=false;
+  function hideM(){$('modal').hidden=true;document.body.style.overflow='';if(pendingSync){pendingSync=false;setTimeout(syncFromStorage,0);}}
+  function closeM(){var w=pushed;hideM();if(w){pushed=false;try{history.back();}catch(e){}}}
+  function showM(){$('modal').hidden=false;document.body.style.overflow='hidden';if(!pushed){try{history.pushState({m:1},'');pushed=true;}catch(e){}}}
+  window.addEventListener('popstate',function(){if(!$('modal').hidden){pushed=false;hideM();}});
+  function applyFs(){document.body.style.zoom=(db.fs&&db.fs>1)?db.fs:'';}
   
   function copy(t){
     function fb(){
@@ -490,18 +571,62 @@ pre {
     }else fb();
   }
 
-  function processBackupObject(o){
-    if(!o || !o.m || !o.d || !o.x){
-      toast('Arquivo ou texto de backup inválido');
-      return false;
-    }
-    db = o;
-    db.lastBackup = Date.now();
-    save();
-    closeM();
-    render();
-    toast('Backup restaurado com sucesso!');
-    return true;
+  function mergeById(cur,inc){
+    var im={},seen={};inc.forEach(function(r){ im[r.id]=r; });
+    var out=cur.map(function(r){ if(r.id in im){ seen[r.id]=1; return im[r.id]; } return r; });
+    inc.forEach(function(r){ if(!seen[r.id]) out.push(r); });
+    return out;
+  }
+  function processBackupObject(o, soSubstituir){
+    if(!valid(o)){ toast('Backup inválido: o formato não é o esperado. Nada foi alterado.',5000); return false; }
+    var resumo=o.m.length+' familiar(es), '+o.d.length+' remédio(s), '+o.x.length+' exame(s)';
+    var temDados=db.m.length||db.d.length||db.x.length, merge=false;
+    if(temDados && !soSubstituir){
+      if(confirm('Este backup tem '+resumo+'.\n\nJá existem dados neste aparelho.\n\nOK = ADICIONAR o conteúdo do backup aos dados atuais (nada é apagado; registros com o mesmo código são atualizados).\nCancelar = ver a opção de substituir.')) merge=true;
+      else if(!confirm('Substituir TODOS os dados atuais por este backup ('+resumo+')?\n\nUma cópia dos dados atuais fica guardada para você poder desfazer.')) return false;
+    } else if(!confirm('Restaurar este backup ('+resumo+')?'+(temDados?'\n\nIsto SUBSTITUI todos os dados atuais. Uma cópia dos dados atuais fica guardada para você poder desfazer.':''))) return false;
+    try{localStorage.setItem(KEY+'_antes_restauro',JSON.stringify(db));}catch(x){}
+    if(merge){
+      db.m=mergeById(db.m,o.m); db.d=mergeById(db.d,o.d); db.x=mergeById(db.x,o.x);
+      (Array.isArray(o.customMeds)?o.customMeds:[]).forEach(function(n){ if(isStr(n) && (db.customMeds||[]).indexOf(n)<0) db.customMeds.push(n); });
+      if(!db.sel && db.m.length) db.sel=db.m[0].id;
+      save();
+    } else { db=fixDb(o); db.lastBackup=Date.now(); save(true); }
+    applyFs(); closeM(); render();
+    toast(merge?'Backup adicionado aos dados atuais.':'Backup restaurado com sucesso!'); return true;
+  }
+
+  /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
+  function exportable(ids){
+    if(ids.length===db.m.length) return clone(db);
+    var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
+      m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
+      d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
+      x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
+    var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
+    o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
+    return o;
+  }
+  function chooseMembers(titulo, cb){
+    if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
+    var s=$('sheet'); s.innerHTML=''; s.appendChild(el('h2','',titulo));
+    s.appendChild(el('p','note','Marque quem entra no arquivo. Quem ficar desmarcado não é incluído de forma alguma.'));
+    var checks=[];
+    db.m.forEach(function(m){
+      var nd=db.d.filter(function(x){return x.mid===m.id;}).length, nx=db.x.filter(function(x){return x.mid===m.id;}).length;
+      var lab=el('label','card'); lab.style.cssText='display:flex;gap:12px;align-items:center;cursor:pointer';
+      var c=el('input'); c.type='checkbox'; c.checked=true; c.style.cssText='width:24px;height:24px;flex:none;margin:0';
+      var t=el('div'); t.appendChild(el('b','',m.name)); t.appendChild(el('div','s',nd+' remédio(s) · '+nx+' exame(s)'));
+      lab.appendChild(c); lab.appendChild(t); s.appendChild(lab); checks.push([m.id,c]);
+    });
+    var row=el('div','row'), back=el('button','sec','Voltar'), go=el('button','pri','Continuar');
+    back.onclick=settings;
+    go.onclick=function(){
+      var ids=checks.filter(function(c){return c[1].checked;}).map(function(c){return c[0];});
+      if(!ids.length){ toast('Marque pelo menos um familiar'); return; }
+      cb(ids);
+    };
+    row.appendChild(back); row.appendChild(go); s.appendChild(row); showM();
   }
 
   function form(title,fields,vals,onSave,onDel,delTxt,hook){
@@ -513,6 +638,7 @@ pre {
       else if(f.t==='sel'){i=el('select');f.o.forEach(function(o){var op=el('option','',o[1]);op.value=o[0];i.appendChild(op);});}
       else{i=el('input');i.type=f.t||'text';}
       if(f.p)i.placeholder=f.p;
+      if(f.list){var dl=el('datalist');dl.id='dl_'+f.k;f.list.forEach(function(n){var op=el('option');op.value=n;dl.appendChild(op);});i.setAttribute('list',dl.id);l.appendChild(dl);}
       i.value=(vals&&vals[f.k]!=null)?vals[f.k]:(f.d||'');
       ins[f.k]=i;l.appendChild(i);s.appendChild(l);
     });
@@ -538,7 +664,7 @@ pre {
       };
       s.appendChild(d);
     }
-    $('modal').hidden=false;document.body.style.overflow='hidden';
+    showM();
   }
 
   function editMember(m){
@@ -560,45 +686,45 @@ pre {
   // Base Expandida RENAME (Atenção Básica e Especializada + Uso Frequente)
   var MEDS_EXPANDED = [
     'Acebrofilina=5 mg/mL xarope adulto;25 mg/5 mL xarope infantil',
-    'Acetato de dexametasona=0,1% creme',
-    'Acetato de hidrocortisona=1% creme;10 mg/g',
+    'Acetato de hidrocortisona=10 mg/g (1%) creme',
     'Acetazolamida=250 mg',
     'Acetilcisteína=20mg/mL xarope;100mg;200mg;600mg envelope',
     'Ácido acetilsalicílico (AAS)=100 mg;500 mg',
     'Ácido fólico=5 mg;0,2 mg/mL gotas',
-    'Ácido valpróico / Valproato de sódio=250 mg;500 mg;50 mg/mL xarope',
+    'Ácido valproico (valproato de sódio)=250 mg;500 mg;50 mg/mL xarope',
     'Albendazol=400 mg;40 mg/mL suspensão',
     'Alendronato de sódio=70 mg',
     'Alopurinol=100 mg;300 mg',
     'Alprazolam=0,25 mg;0,5 mg;1 mg;2 mg',
     'Ambroxol=15 mg/5 mL infantil;30 mg/5 mL adulto',
-    'Amiodarona=200 mg',
-    'Amitriptilina=25 mg;75 mg',
+    'Cloridrato de amiodarona=200 mg',
+    'Cloridrato de amitriptilina=25 mg;75 mg',
     'Amoxicilina=500 mg;250 mg/5 mL suspensão',
-    'Amoxicilina + clavulanato=500 mg + 125 mg;875 mg + 125 mg;250 mg + 62,5 mg/5 mL',
+    'Amoxicilina + clavulanato de potássio=500 mg + 125 mg;875 mg + 125 mg;250 mg + 62,5 mg/5 mL',
     'Ampicilina=500 mg',
     'Anastrozol=1 mg',
-    'Anlodipino=5 mg;10 mg',
+    'Besilato de anlodipino=5 mg;10 mg',
     'Atenolol=25 mg;50 mg;100 mg',
-    'Atorvastatina=10 mg;20 mg;40 mg;80 mg',
+    'Atorvastatina cálcica=10 mg;20 mg;40 mg;80 mg',
     'Azitromicina=500 mg;200 mg/5 mL suspensão',
     'Baclofeno=10 mg',
-    'Beclometasona (spray)=50 mcg;200 mcg;250 mcg',
+    'Dipropionato de beclometasona=50 mcg;200 mcg;250 mcg',
     'Benzilpenicilina benzatina (Benzetacil)=1.200.000 UI;600.000 UI',
-    'Betametasona (dipropionato/fosfato)=5 mg/mL + 2 mg/mL',
-    'Bequimicina / Neomicina + bacitracina=5 mg/g + 250 UI/g pomada',
-    'Biperideno=2 mg',
-    'Brimonidina (colírio)=0,2%',
+    'Dipropionato de betametasona + fosfato dissódico de betametasona (Diprospan)=5 mg/mL + 2 mg/mL',
+    'Acetato de betametasona + fosfato dissódico de betametasona=3 mg/mL + 3 mg/mL',
+    'Neomicina + bacitracina (Nebacetin)=5 mg/g + 250 UI/g pomada',
+    'Cloridrato de biperideno=2 mg',
+    'Tartarato de brimonidina (colírio)=0,2%',
     'Brimonidina + timolol (colírio)=0,2% + 0,5%',
     'Budesonida (spray nasal/inalação)=32 mcg;64 mcg;200 mcg;400 mcg;0,25 mg/mL',
     'Buprenorfina=5 mg;10 mg adesivo',
-    'Bupropiona=150 mg',
-    'Buscopan / Escopolamina=10 mg;10 mg/mL gotas',
-    'Buscopan Composto / Escopolamina + dipirona=250 mg + 10 mg',
+    'Cloridrato de bupropiona=150 mg',
+    'Butilbrometo de escopolamina (Buscopan)=10 mg;10 mg/mL gotas',
+    'Butilbrometo de escopolamina + dipirona (Buscopan Composto)=250 mg + 10 mg',
     'Candesartana=8 mg;16 mg;32 mg',
     'Captopril=12,5 mg;25 mg;50 mg',
     'Carbamazepina=200 mg;400 mg;20 mg/mL suspensão',
-    'Carbonato de cálcio + vitamina D3=500 mg + 400 UI;600 mg + 400 UI',
+    'Carbonato de cálcio + colecalciferol (vitamina D3)=1.250 mg (500 mg de cálcio) + 200 UI;1.250 mg (500 mg de cálcio) + 400 UI;1.500 mg (600 mg de cálcio) + 400 UI',
     'Carbonato de lítio=300 mg',
     'Carvedilol=3,125 mg;6,25 mg;12,5 mg;25 mg',
     'Cefalexina=500 mg;250 mg/5 mL suspensão',
@@ -613,25 +739,25 @@ pre {
     'Claritromicina=500 mg;125 mg/5 mL suspensão',
     'Clonazepam (Rivotril)=0,5 mg;2 mg;2,5 mg/mL gotas',
     'Clonidina=0,100 mg;0,150 mg;0,200 mg',
-    'Clopidogrel=75 mg',
+    'Bissulfato de clopidogrel=75 mg',
     'Cloridrato de dorzolamida (colírio)=2%',
-    'Cloridrato de metformina=500 mg;850 mg;1000 mg',
-    'Clorpromazina=25 mg;100 mg;40 mg/mL gotas',
+    'Cloridrato de metformina=500 mg;850 mg;1000 mg;500 mg XR;750 mg XR',
+    'Cloridrato de clorpromazina=25 mg;100 mg;40 mg/mL gotas',
     'Clortalidona=12,5 mg;25 mg;50 mg',
     'Desloratadina=5 mg;0,5 mg/mL xarope',
-    'Dexametasona=4 mg;0,1 mg/mL elixir;0,1% colírio',
-    'Dexclorfeniramina (Polaramine)=2 mg;0,4 mg/mL solução',
+    'Dexametasona=4 mg;0,1 mg/mL elixir;4 mg/mL injetável;0,1% creme dermatológico;0,1% pomada oftálmica;0,1% colírio',
+    'Maleato de dexclorfeniramina (Polaramine)=2 mg;0,4 mg/mL solução',
     'Diazepam=5 mg;10 mg',
     'Diclofenaco sódico/potássico=50 mg;100 mg;15 mg/mL gotas',
     'Digoxina=0,25 mg',
     'Diltiazem=30 mg;60 mg',
     'Dipirona=500 mg;1 g;500 mg/mL gotas',
-    'Dizopiramida=100 mg',
+    'Disopiramida=100 mg',
     'Domperidona=10 mg;1 mg/mL suspensão',
-    'Doxazosina=2 mg;4 mg',
-    'Doxiciclina=100 mg',
+    'Mesilato de doxazosina=2 mg;4 mg',
+    'Cloridrato de doxiciclina=100 mg',
     'Duloxetina=30 mg;60 mg',
-    'Enalapril=5 mg;10 mg;20 mg',
+    'Maleato de enalapril=5 mg;10 mg;20 mg',
     'Enoxaparina sódica=20 mg;40 mg;60 mg;80 mg injetável',
     'Escitalopram=10 mg;15 mg;20 mg;20 mg/mL gotas',
     'Espironolactona=25 mg;50 mg;100 mg',
@@ -641,7 +767,7 @@ pre {
     'Finasterida=1 mg;5 mg',
     'Fluconazol=150 mg',
     'Flunarizina=10 mg',
-    'Fluoxetina=20 mg',
+    'Cloridrato de fluoxetina=20 mg',
     'Fluticasona (spray nasal/inalação)=50 mcg;250 mcg',
     'Furosemida=40 mg',
     'Gabapentina=300 mg;400 mg',
@@ -653,13 +779,15 @@ pre {
     'Ibuprofeno=300 mg;600 mg;50 mg/mL gotas;100 mg/mL gotas',
     'Imipramina=25 mg',
     'Indapamida=1,5 mg SR;2,5 mg',
-    'Insulina NPH=100 UI/mL',
-    'Insulina Regular=100 UI/mL',
-    'Insulina Glargina / Lispro / Aspart=100 UI/mL',
-    'Ipratrópio (Atrovent)=0,25 mg/mL solução para inalação',
+    'Insulina humana NPH=100 UI/mL',
+    'Insulina humana regular=100 UI/mL',
+    'Insulina glargina (análoga de ação prolongada)=100 UI/mL',
+    'Insulina lispro (análoga de ação rápida)=100 UI/mL',
+    'Insulina aspart (análoga de ação rápida)=100 UI/mL',
+    'Brometo de ipratrópio (Atrovent)=0,25 mg/mL solução para inalação',
     'Ivermectina=6 mg',
-    'Isossorbida (dinitrato)=5 mg sublingual;10 mg',
-    'Isossorbida (mononitrato)=20 mg;40 mg',
+    'Dinitrato de isossorbida=5 mg sublingual;10 mg',
+    'Mononitrato de isossorbida=20 mg;40 mg',
     'Ivabradina=5 mg;7,5 mg',
     'Latanoprosta (colírio)=0,005%',
     'Latanoprosta + timolol (colírio)=0,005% + 0,5%',
@@ -670,67 +798,64 @@ pre {
     'Levofloxacino=500 mg;750 mg',
     'Levomepromazina=25 mg;100 mg;4% gotas',
     'Levotiroxina sódica=25 mcg;38 mcg;50 mcg;75 mcg;88 mcg;100 mcg;112 mcg;125 mcg;150 mcg;175 mcg;200 mcg',
-    'Lidocaína=2% geléia;5% pomada',
+    'Cloridrato de lidocaína=2% geléia;5% pomada',
     'Loratadina=10 mg;1 mg/mL xarope',
     'Lorazepam=1 mg;2 mg',
     'Losartana potássica=25 mg;50 mg;100 mg',
     'Mebendazol=100 mg;20 mg/mL suspensão',
     'Meloxicam=7,5 mg;15 mg',
-    'Metformin / Metformina XR=500 mg;7 mg;850 mg;1000 mg',
     'Metildopa=250 mg;500 mg',
-    'Metoclopramida (Plasil)=10 mg;4 mg/mL gotas',
-    'Metoprolol (succinato/tartarato)=25 mg;50 mg;100 mg',
+    'Cloridrato de metoclopramida (Plasil)=10 mg;4 mg/mL gotas',
+    'Succinato de metoprolol=25 mg;50 mg;100 mg (liberação prolongada)',
+    'Tartarato de metoprolol=100 mg',
     'Metronidazol=250 mg;400 mg;100 mg/g gel vaginal',
-    'Miconazol=2% creme vaginal;2% creme dermatológico',
+    'Nitrato de miconazol=2% creme vaginal;2% creme dermatológico',
     'Mirtazapina=15 mg;30 mg;45 mg',
     'Montelucaste de sódio=4 mg;5 mg;10 mg',
-    'Morfina=10 mg;30 mg;10 mg/mL',
+    'Sulfato de morfina=10 mg;30 mg;10 mg/mL',
     'Naproxeno=250 mg;500 mg',
-    'Nfedipino (Adalat / Retard)=10 mg;20 mg',
+    'Nifedipino (Adalat / Retard)=10 mg;20 mg',
     'Nimesulida=100 mg;50 mg/mL gotas',
     'Nistatina=100.000 UI/mL suspensão oral;25.000 UI/g creme vaginal',
     'Nitrofurantoína=100 mg',
-    'Nortriptilina=10 mg;25 mg;50 mg;75 mg',
+    'Cloridrato de nortriptilina=10 mg;25 mg;50 mg;75 mg',
     'Omeprazol=10 mg;20 mg;40 mg',
-    'Ondansetrona=4 mg;8 mg;2 mg/mL',
+    'Cloridrato de ondansetrona=4 mg;8 mg;2 mg/mL',
     'Oxcarbazepina=300 mg;600 mg;60 mg/mL suspensão',
     'Pantoprazol=20 mg;40 mg',
     'Paracetamol=500 mg;750 mg;200 mg/mL gotas',
-    'Paracetamol + codeína (Tylex)=500 mg + 7,5 mg;500 mg + 30 mg',
+    'Paracetamol + fosfato de codeína (Tylex)=500 mg + 7,5 mg;500 mg + 30 mg',
     'Paroxetina=15 mg;20 mg;25 mg',
     'Permetrina=5% loção',
-    'Pilocarpina (colírio)=2%',
+    'Cloridrato de pilocarpina (colírio)=2%',
     'Pioglitazona=15 mg;30 mg',
-    'Prednisolona=3 mg/mL solução oral',
+    'Fosfato sódico de prednisolona=3 mg/mL solução oral',
     'Prednisona=5 mg;20 mg;50 mg',
     'Pregabalina=50 mg;75 mg;150 mg',
-    'Prometazina (Fenergan)=25 mg',
-    'Propafenona=300 mg',
-    'Propranolol=10 mg;40 mg;80 mg',
-    'Quetiapina=25 mg;100 mg;200 mg;300 mg',
+    'Cloridrato de prometazina (Fenergan)=25 mg',
+    'Cloridrato de propafenona=300 mg',
+    'Cloridrato de propranolol=10 mg;40 mg;80 mg',
+    'Hemifumarato de quetiapina=25 mg;100 mg;200 mg;300 mg',
     'Ramipril=2,5 mg;5 mg;10 mg',
     'Ranitidina=150 mg;300 mg',
-    'Risedronato de sódio=35 mg',
+    'Risedronato sódico=35 mg',
     'Risperidona=1 mg;2 mg;3 mg;1 mg/mL solução',
     'Rivaroxabana=10 mg;15 mg;20 mg',
     'Rosuvastatina=5 mg;10 mg;20 mg;40 mg',
-    'Salbutamol (aerossol/spray)=100 mcg;5 mg/mL solução para inalação',
+    'Sulfato de salbutamol=100 mcg;5 mg/mL solução para inalação',
     'Sertralina=25 mg;50 mg;100 mg',
-    'Sequil / Quetiapina=25 mg;100 mg',
     'Simeticona (Luftal)=40 mg;75 mg/mL gotas',
     'Sinvastatina=10 mg;20 mg;40 mg',
-    'Solução Fisiológica (Cloreto de sódio)=0,9%',
-    'Succinato de metoprolol=25 mg;50 mg;100 mg',
+    'Cloreto de sódio (solução fisiológica)=0,9%',
     'Sulfacetamida sódica (colírio)=10%',
     'Sulfadiazina de prata=1% creme',
     'Sulfametoxazol + trimetoprima (Bactrim)=400+80 mg;800+160 mg;200+40 mg/5 mL',
-    'Sulfato de salbutamol=100 mcg',
     'Sulfato ferroso=40 mg ferro elementar;125 mg/mL gotas',
-    'Toxina botulínica=100 UI',
+    'Toxina botulínica A=100 UI',
     'Tamoxifeno=10 mg;20 mg',
     'Tamsulosina=0,4 mg',
-    'Tiamina (Vitamina B1)=300 mg',
-    'Timolol (colírio)=0,25%;0,5%',
+    'Cloridrato de tiamina (vitamina B1)=300 mg',
+    'Maleato de timolol (colírio)=0,25%;0,5%',
     'Tiotrópio=2,5 mcg inh',
     'Tizanidina=2 mg',
     'Topiramato=25 mg;50 mg;100 mg',
@@ -739,15 +864,26 @@ pre {
     'Triancinolona acetonida=1 mg/g orabase',
     'Valsartana=80 mg;160 mg;320 mg',
     'Venlafaxina=37,5 mg;75 mg;150 mg',
-    'Verapamil=80 mg;120 mg',
+    'Cloridrato de verapamil=80 mg;120 mg',
     'Vildagliptina=50 mg',
     'Vildagliptina + metformina=50 mg + 850 mg;50 mg + 1000 mg',
     'Vitamina D3 (Colecalciferol)=1.000 UI;7.000 UI;10.000 UI;50.000 UI;200 UI/gotas',
-    'Warfarina / Varfarina=1 mg;5 mg',
+    'Varfarina sódica=1 mg;5 mg',
     'Zolpidem=5 mg;10 mg'
   ];
 
   function norm(s){ return s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') : ''; }
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  /* Lê números no formato brasileiro: 220.000 -> 220000; 1.234,5 -> 1234.5; 6,1 -> 6.1. Recusa "120/80", "<0,5". */
+  function parseNum(v){
+    var t=String(v==null?'':v).trim();
+    if(/\d\s*\/\s*\d|[<>≤≥]/.test(t))return NaN;
+    var m=t.match(/^(-?\d[\d.,]*)\s*[^\d.,\-]*$/);if(!m)return NaN;t=m[1];
+    if(/^-?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(t)||t.indexOf(',')>=0)t=t.replace(/\./g,'').replace(',','.');
+    var n=parseFloat(t);return isFinite(n)?n:NaN;
+  }
+  var COMMON_EXAMS=['Hemoglobina glicada (HbA1c)','Glicemia de jejum','Colesterol total','LDL','HDL','Triglicerídeos','Creatinina','TFG','Ureia','Ácido úrico','TSH','T4 livre','Hemoglobina','Hematócrito','Leucócitos','Plaquetas','Ferritina','Vitamina D (25-OH)','Vitamina B12','TGO (AST)','TGP (ALT)','GGT','PCR','VHS','PSA total','Sódio','Potássio','Cálcio','Pressão arterial'];
+  function examNames(){var seen={},out=[];db.x.map(function(x){return x.n;}).concat(COMMON_EXAMS).forEach(function(n){var k=norm(n);if(!seen[k]){seen[k]=1;out.push(n);}});return out;}
 
   var MED_BASE = MEDS_EXPANDED.map(function(l){
     var p = l.split('=');
@@ -761,6 +897,7 @@ pre {
     
     customList.forEach(function(cName){
       var kNorm = norm(cName);
+      if((db.hiddenMeds || []).indexOf(kNorm) >= 0) return;
       var exists = combined.some(function(item){ return item.k === kNorm; });
       if(!exists) {
         combined.push({ n: cName, p: [], k: kNorm, custom: true });
@@ -772,6 +909,7 @@ pre {
       db.d.forEach(function(item){
         if(item.n) {
           var kNorm = norm(item.n);
+          if((db.hiddenMeds || []).indexOf(kNorm) >= 0) return;
           var exists = combined.some(function(i){ return i.k === kNorm; });
           if(!exists) {
             combined.push({ n: item.n, p: [], k: kNorm, custom: true });
@@ -788,6 +926,7 @@ pre {
     if(!name) return;
     var cleanName = name.trim();
     var kNorm = norm(cleanName);
+    db.hiddenMeds = (db.hiddenMeds || []).filter(function(h){ return h !== kNorm; });
     var all = getCombinedMeds();
     var exists = all.some(function(i){ return i.k === kNorm; });
     
@@ -849,7 +988,7 @@ pre {
       }
 
       var allMeds = getCombinedMeds();
-      var hit = allMeds.filter(function(i){ return i.k.indexOf(k) >= 0; }).slice(0, 7);
+      var hit = allMeds.filter(function(i){ return i.k.indexOf(k) >= 0; }).sort(function(a,b){var pa=a.k.indexOf(k)===0?0:1,pb=b.k.indexOf(k)===0?0:1;return pa-pb||a.n.localeCompare(b.n);}).slice(0, 7);
 
       if(!hit.length) {
         hideSug();
@@ -872,10 +1011,6 @@ pre {
 
         // Mudar para mousedown para acionar antes da perda de foco no celular
         b.addEventListener('mousedown', function(e){
-          e.preventDefault();
-          selectMed(i);
-        });
-        b.addEventListener('touchstart', function(e){
           e.preventDefault();
           selectMed(i);
         });
@@ -930,7 +1065,7 @@ pre {
     var m = cur();
     form(x ? 'Editar exame' : 'Novo resultado de exame',
       [
-        {k:'n',l:'Exame',req:1,p:'Ex.: Hemoglobina glicada'},
+        {k:'n',l:'Exame',req:1,p:'Ex.: Hemoglobina glicada',list:examNames()},
         {k:'dt',l:'Data',t:'date',req:1,d:today()},
         {k:'v',l:'Resultado',req:1,p:'Ex.: 6.1'},
         {k:'u',l:'Unidade',p:'Ex.: %'},
@@ -984,8 +1119,8 @@ pre {
     L.push('', 'EXAMES (resultado mais recente de cada)');
     var seen = {}, n = 0;
     db.x.filter(function(x){ return x.mid === m.id; }).sort(byDate).forEach(function(x){
-      var k = x.n.toLowerCase(); if(seen[k]) return; seen[k] = 1; n++;
-      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r : '') + ' — ' + fd(x.dt));
+      var k = norm(x.n); if(seen[k]) return; seen[k] = 1; n++;
+      L.push('- ' + x.n + ': ' + x.v + (x.u ? ' ' + x.u : '') + (x.r ? ' (ref.: ' + x.r + ')' : '') + ' — ' + fd(x.dt));
     });
     if(!n) L.push('- nenhum registrado');
     L.push('', 'Atualizado em ' + fd(today()));
@@ -1000,20 +1135,24 @@ pre {
 
     var points = [];
     list.forEach(function(x){
-      var val = parseFloat(x.v.replace(',','.'));
+      var val = parseNum(x.v);
       if(!isNaN(val)) points.push({ dt: x.dt, v: val, orig: x });
     });
 
     if(points.length < 2) return null;
+    var yrs = {}; points.forEach(function(p){ yrs[p.dt.slice(0,4)] = 1; }); yrs = Object.keys(yrs).length;
 
     var box = el('div','chart-card');
     var tHead = el('div','chart-title');
-    tHead.appendChild(el('span','','📈 Evolução: ' + examName));
+    var lu = (points[points.length-1].orig.u || '').trim();
+    tHead.appendChild(el('span','','📈 Evolução: ' + examName + (lu ? ' (' + lu + ')' : '')));
     
     var closeBtn = el('button','link','Fechar gráfico');
     closeBtn.onclick = function(){ selectedExamName = ''; render(); };
     tHead.appendChild(closeBtn);
     box.appendChild(tHead);
+    var us = {}; points.forEach(function(p){ us[(p.orig.u || '').trim().toLowerCase()] = 1; });
+    if(Object.keys(us).length > 1) box.appendChild(el('div','note','⚠️ Este exame aparece com unidades diferentes; compare com cuidado.'));
 
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
@@ -1073,7 +1212,7 @@ pre {
       textDt.setAttribute("text-anchor", "middle");
       textDt.setAttribute("font-size", "9");
       textDt.setAttribute("fill", "var(--muted)");
-      textDt.textContent = fd(c.p.dt).slice(0,5);
+      textDt.textContent = yrs > 1 ? fd(c.p.dt).slice(0,6) + c.p.dt.slice(2,4) : fd(c.p.dt).slice(0,5);
       svg.appendChild(textDt);
     });
 
@@ -1109,6 +1248,49 @@ pre {
     }
   }
 
+  function medUse(k){ return db.d.filter(function(x){ return norm(x.n) === k; }).length; }
+  function dropSuggestion(i){
+    db.customMeds = (db.customMeds || []).filter(function(n){ return norm(n) !== i.k; });
+    db.hiddenMeds = db.hiddenMeds || [];
+    if(db.hiddenMeds.indexOf(i.k) < 0) db.hiddenMeds.push(i.k);
+  }
+  function editSuggestion(i, row){
+    row.innerHTML = ''; var inp = el('input'); inp.value = i.n; row.appendChild(inp);
+    var acts = el('div','row'), c = el('button','sec','Cancelar'), ok = el('button','pri','Salvar');
+    c.onclick = manageMeds;
+    ok.onclick = function(){
+      var nn = inp.value.trim(); if(!nn){ toast('Digite o nome correto'); return; }
+      var uses = medUse(i.k);
+      dropSuggestion(i); registerNewMedName(nn);
+      if(uses && confirm('Também corrigir o nome nos ' + uses + ' remédio(s) já cadastrado(s)?')){
+        db.d.forEach(function(x){ if(norm(x.n) === i.k) x.n = nn; });
+      }
+      save(); manageMeds(); toast('Nome atualizado');
+    };
+    acts.appendChild(c); acts.appendChild(ok); row.appendChild(acts); inp.focus();
+  }
+  function manageMeds(){
+    var s = $('sheet'); s.innerHTML = '';
+    s.appendChild(el('h2','','Sugestões salvas de remédios'));
+    s.appendChild(el('p','note','São os nomes que o app aprendeu quando você cadastrou remédios (marcados "Salvo"). Apagar uma sugestão não apaga os remédios já cadastrados.'));
+    var list = getCombinedMeds().filter(function(i){ return i.custom; });
+    if(!list.length) s.appendChild(el('div','empty','Nenhuma sugestão salva.'));
+    list.forEach(function(i){
+      var uses = medUse(i.k), row = el('div','card'); row.style.cursor = 'default';
+      row.appendChild(el('b','',i.n));
+      row.appendChild(el('div','s', uses ? uses + ' cadastro(s) com este nome' : 'Nenhum cadastro com este nome'));
+      var acts = el('div','row'), be = el('button','sec','✏️ Editar'), bd = el('button','del','🗑 Apagar'); bd.style.marginTop = '0';
+      be.onclick = function(){ editSuggestion(i, row); };
+      bd.onclick = function(){
+        if(!confirm('Apagar a sugestão "' + i.n + '"?' + (uses ? '\n\nOs ' + uses + ' cadastro(s) com esse nome continuam como estão.' : ''))) return;
+        dropSuggestion(i); save(); manageMeds();
+      };
+      acts.appendChild(be); acts.appendChild(bd); row.appendChild(acts); s.appendChild(row);
+    });
+    var back = el('button','sec','Voltar'); back.style.marginTop = '12px'; back.onclick = settings; s.appendChild(back);
+    showM();
+  }
+
   function settings(){
     var s = $('sheet'); s.innerHTML = '';
     s.appendChild(el('h2', '', '⚙️ Configurações & Backup'));
@@ -1118,32 +1300,33 @@ pre {
 
     var rowExp = el('div', 'row');
     var btnExpText = el('button', 'pri', 'Exportar Texto');
-    btnExpText.onclick = function(){
-      db.lastBackup = Date.now();
-      save();
-      var json = JSON.stringify(db, null, 2);
-      var wrap = el('div');
-      wrap.appendChild(el('p', 'note', 'Copie o código JSON abaixo para guardar em local seguro:'));
-      var ta = el('textarea'); ta.rows = 8; ta.value = json;
-      wrap.appendChild(ta);
-      var btnCopy = el('button', 'pri', 'Copiar JSON');
-      btnCopy.style.marginTop = '8px';
-      btnCopy.onclick = function(){ copy(json); };
-      wrap.appendChild(btnCopy);
-      s.appendChild(wrap);
-    };
+    btnExpText.onclick = function(){ chooseMembers('Exportar texto: quem incluir?', function(ids){
+      var o=exportable(ids), json=JSON.stringify(o,null,2);
+      if(!o.parcial){ db.lastBackup=Date.now(); save(); }
+      var s2=$('sheet'); s2.innerHTML=''; s2.appendChild(el('h2','','Exportar texto'));
+      s2.appendChild(el('p','note',(o.parcial?'Backup PARCIAL ('+o.m.length+' familiar(es)). ':'')+'Copie o código JSON abaixo para guardar em local seguro:'));
+      var ta=el('textarea'); ta.rows=8; ta.value=json; s2.appendChild(ta);
+      var bc=el('button','pri','Copiar JSON'); bc.style.marginTop='8px'; bc.onclick=function(){ copy(json); }; s2.appendChild(bc);
+      var bb=el('button','sec','Voltar'); bb.style.marginTop='8px'; bb.onclick=settings; s2.appendChild(bb);
+    }); };
 
     var btnExpFile = el('button', 'pri', 'Exportar Arquivo');
-    btnExpFile.onclick = function(){
-      db.lastBackup = Date.now();
-      save();
-      var blob = new Blob([JSON.stringify(db, null, 2)], {type: 'application/json'});
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'saude_familia_backup_' + today() + '.json';
-      a.click();
-      toast('Backup baixado com sucesso!');
-    };
+    btnExpFile.onclick = function(){ chooseMembers('Exportar arquivo: quem incluir?', function(ids){
+      var o=exportable(ids), json=JSON.stringify(o,null,2), file=null;
+      var fname='saude_familia_'+(o.parcial?'parcial_':'backup_')+today()+'.json';
+      function ok(msg){ if(!o.parcial){ db.lastBackup=Date.now(); save(); } toast(msg); }
+      try{ file=new File([json],fname,{type:'application/json'}); }catch(e){}
+      if(file && navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share({files:[file],title:'Saúde da família'}).then(function(){ ok('Arquivo compartilhado'); }).catch(function(){});
+      } else {
+        var a=document.createElement('a');
+        a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+        a.download=fname; document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); },1000);
+        ok(o.parcial?'Arquivo parcial baixado':'Backup baixado com sucesso!');
+      }
+      settings();
+    }); };
 
     rowExp.appendChild(btnExpText);
     rowExp.appendChild(btnExpFile);
@@ -1152,15 +1335,14 @@ pre {
     var rowImp = el('div', 'row');
     var btnImpText = el('button', 'sec', 'Restaurar Texto');
     btnImpText.onclick = function(){
-      var json = prompt('Cole aqui o texto JSON do backup:');
-      if(json){
-        try {
-          var obj = JSON.parse(json);
-          processBackupObject(obj);
-        } catch(err) {
-          toast('Texto JSON inválido!');
-        }
-      }
+      var old1 = s.querySelector('.imp-box'); if(old1) s.removeChild(old1);
+      var wrap = el('div','imp-box');
+      wrap.appendChild(el('p','note','Cole abaixo o texto do backup (JSON):'));
+      var ta = el('textarea'); ta.rows = 6; wrap.appendChild(ta);
+      var go = el('button','pri','Restaurar este texto'); go.style.marginTop = '8px';
+      go.onclick = function(){ try{ processBackupObject(JSON.parse(ta.value)); }catch(err){ toast('Texto JSON inválido!'); } };
+      wrap.appendChild(go);
+      s.insertBefore(wrap, s.querySelector('.close-row'));
     };
 
     var btnImpFile = el('button', 'sec', 'Restaurar Arquivo');
@@ -1190,15 +1372,31 @@ pre {
     secBackup.appendChild(rowImp);
     s.appendChild(secBackup);
 
-    var rowClose = el('div', 'row');
-    rowClose.style.marginTop = '16px';
+    s.appendChild(el('p','note','O backup é um arquivo de texto com dados de saúde, sem senha. Guarde em local seguro.'));
+    var bm = el('button','sec','✏️ Gerenciar sugestões de remédios'); bm.style.marginTop = '10px'; bm.onclick = manageMeds; s.appendChild(bm);
+    var secRec = el('div'); secRec.appendChild(el('h3','','Recuperar cópias neste aparelho')); var anyRec = false;
+    [['_antes_restauro','Antes da última restauração'],['_snap1','Cópia automática mais recente'],['_snap2','Cópia automática anterior']].forEach(function(c){
+      var o = null; try{ var raw = localStorage.getItem(KEY + c[0]); o = raw ? JSON.parse(raw) : null; }catch(e){}
+      if(!valid(o)) return; anyRec = true;
+      var b = el('button','sec', c[1] + ' (' + o.m.length + ' fam., ' + o.d.length + ' rem., ' + o.x.length + ' exames)'); b.style.marginTop = '6px';
+      b.onclick = function(){ processBackupObject(o, true); }; secRec.appendChild(b);
+    });
+    if(anyRec) s.appendChild(secRec);
+    var secFs = el('div'); secFs.appendChild(el('h3','','Tamanho do texto')); var rf = el('div','row');
+    [['A',1],['A+',1.15],['A++',1.3]].forEach(function(f){
+      var b = el('button', (db.fs || 1) === f[1] ? 'pri' : 'sec', f[0]);
+      b.onclick = function(){ db.fs = f[1]; save(); applyFs(); settings(); }; rf.appendChild(b);
+    });
+    rf.style.gridTemplateColumns = '1fr 1fr 1fr'; secFs.appendChild(rf); s.appendChild(secFs);
+
+    var rowClose = el('div', 'row close-row');
+    rowClose.style.marginTop = '16px'; rowClose.style.gridTemplateColumns = 'minmax(0, 260px)'; rowClose.style.justifyContent = 'center';
     var btnClose = el('button', 'sec', 'Fechar');
     btnClose.onclick = closeM;
     rowClose.appendChild(btnClose);
     s.appendChild(rowClose);
 
-    $('modal').hidden = false;
-    document.body.style.overflow = 'hidden';
+    showM();
   }
 
   function render(){
@@ -1304,6 +1502,7 @@ pre {
       p.appendChild(chartContainer);
 
       var box = el('div'); p.appendChild(box);
+      var numCount = function(n){ return all2.filter(function(y){ return norm(y.n) === norm(n) && !isNaN(parseNum(y.v)); }).length; };
 
       var list = function(){
         box.innerHTML = ''; chartContainer.innerHTML = '';
@@ -1317,6 +1516,7 @@ pre {
           if(k && norm(x.n).indexOf(k) < 0) return; n++;
           var c = card(x.n + ': ' + x.v + (x.u ? ' ' + x.u : ''), fd(x.dt) + (x.r ? ' · ref.: ' + x.r : ''), x.o || '', null, function(){ editExam(x); });
           
+          if(numCount(x.n) >= 2){
           var btnG = el('button','link','📈 Evolução');
           btnG.style.fontSize = '12px';
           btnG.onclick = function(ev){
@@ -1325,6 +1525,7 @@ pre {
             render();
           };
           c.querySelector('.grow').appendChild(btnG);
+          }
           box.appendChild(c);
         });
         if(!n) box.appendChild(el('div','empty', all2.length ? 'Nenhum exame encontrado.' : 'Nenhum exame registrado.'));
@@ -1350,7 +1551,7 @@ pre {
           if (window.self !== window.top) {
             var printWin = window.open('', '_blank');
             if (printWin) {
-              printWin.document.write('<!DOCTYPE html><html><head><title>Resumo - ' + m.name + '</title><style>body{font-family:system-ui,sans-serif;padding:20px;line-height:1.6;}pre{white-space:pre-wrap;font-family:inherit;font-size:16px;}</style></head><body><pre>' + summary(m) + '</pre></body></html>');
+              printWin.document.write('<!DOCTYPE html><html><head><title>Resumo - ' + esc(m.name) + '</title><style>body{font-family:system-ui,sans-serif;padding:20px;line-height:1.6;}pre{white-space:pre-wrap;font-family:inherit;font-size:16px;}</style></head><body><pre>' + esc(summary(m)) + '</pre></body></html>');
               printWin.document.close();
               printWin.focus();
               setTimeout(function(){ printWin.print(); printWin.close(); }, 250);
@@ -1372,7 +1573,10 @@ pre {
   $('cfg').onclick = settings;
 
   if(!db.sel && db.m.length) db.sel = db.m[0].id;
+  applyFs();
   render();
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  if(startMsg) setTimeout(function(){ alert(startMsg); }, 300);
 
   // Registro do Service Worker para suporte a PWA Offline
   if ('serviceWorker' in navigator) {
