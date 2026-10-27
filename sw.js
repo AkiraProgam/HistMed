@@ -1,7 +1,7 @@
 /* Saúde da família 8.11: HTML obrigatório, recursos auxiliares opcionais.
    Uma atualização aguarda a ação do usuário antes de substituir a versão ativa. */
 const PREFIXO='saude-familia-';
-const CACHE=PREFIXO+'v8.11';
+const CACHE=PREFIXO+'v8.12';
 const ESSENCIAIS=['./','./index.html'];
 const OPCIONAIS=['./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{

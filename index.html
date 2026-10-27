@@ -475,6 +475,20 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .update-alert button{margin-top:8px;}
 .preset-list label{font-weight:400;}
 @media(max-width:360px){.top{flex-wrap:wrap;gap:6px;}}
+.chips-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;}
+.chip-item:not(.on),.chip-add{background:var(--bg);}
+.head{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;}
+.head>div{min-width:0;}
+.manager-item{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-top:7px;cursor:default;}
+.manager-item .grow{min-width:0;}
+.manager-item b{font-size:16px;}
+.manager-item .mv{flex:none;}
+.manager-item .mv button{background:var(--ac-soft);border-color:var(--line);color:var(--ac);}
+.manager-actions{display:flex;align-items:center;gap:14px;margin-top:2px;}
+.manager-actions button{font-size:14px;padding:4px;}
+.manager-actions .manager-delete{color:var(--bad);}
+.emergency-content{background:var(--ac-soft);border:1px solid var(--ac);border-left:4px solid var(--ac);color:var(--text);padding:16px;}
+@media print{.head{border:0;background:transparent;padding:0;}}
 </style>
 </head>
 <body>
@@ -504,7 +518,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 <script>
 (function(){
   var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
-  var APP_VERSION='8.11';
+  var APP_VERSION='8.12';
   var reportMode='dates', reportExcluded={}, modalDirty=false, previousFocus=null;
   try{var reportStored=JSON.parse(localStorage.getItem(KEY+'_report')||'null');if(reportStored&&typeof reportStored==='object'){if(reportStored.mode==='dates'||reportStored.mode==='latest')reportMode=reportStored.mode;if(reportStored.excluded&&typeof reportStored.excluded==='object'&&!Array.isArray(reportStored.excluded)){Object.keys(reportStored.excluded).forEach(function(k){if(Array.isArray(reportStored.excluded[k]))reportExcluded[k]=reportStored.excluded[k].filter(function(id){return typeof id==='string';});});}}}catch(e){}
   var reportStorageWarned=false;
@@ -1529,11 +1543,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     if(idx < 0) return;
     var nIdx = idx + dir;
     if(nIdx >= 0 && nIdx < db.m.length){
+      var before=captureDb();
       var temp = db.m[idx];
       db.m[idx] = db.m[nIdx];
       db.m[nIdx] = temp;
-      save(); render();
+      if(!save()){rollbackDb(before);return false;}render();return true;
     }
+    return false;
   }
 
   function medUse(k){ return db.d.filter(function(x){ return norm(x.n) === k; }).length; }
@@ -1722,10 +1738,30 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   function getQuickTimes(){return Array.isArray(db.quickTimes)?db.quickTimes.filter(isStr):DEFAULT_TIMES.slice();}
   function commitPreference(key,value){var before=captureDb();db[key]=value;if(!save()){rollbackDb(before);return false;}return true;}
   function managerBack(){modalDirty=false;closeM();render();}
+  function managerArrows(index,length,label,move){
+    var arrows=el('div','mv');
+    [-1,1].forEach(function(direction){var b=el('button','',direction<0?'▲':'▼');b.type='button';b.disabled=index+direction<0||index+direction>=length;b.setAttribute('aria-label',(direction<0?'Subir ':'Descer ')+label);b.title=(direction<0?'Subir ':'Descer ')+label;b.dataset.direction=String(direction);b.onclick=function(){move(direction);};arrows.appendChild(b);});return arrows;
+  }
+  function refreshManager(draw,index,direction){
+    var scroll=$('modal').scrollTop;draw();
+    // showM também agenda o foco: mantém a posição e acompanha o item movido depois disso.
+    setTimeout(function(){var modal=$('modal');modal.scrollTop=scroll;var item=$('sheet').querySelector('.manager-item[data-index="'+index+'"]');if(!item)return;var target=item.querySelector('button[data-direction="'+direction+'"]:not(:disabled)')||item.querySelector('button[data-direction]:not(:disabled)');if(target)target.focus({preventScroll:true});item.scrollIntoView({block:'nearest',inline:'nearest'});},0);
+  }
+  function preferenceMove(key,index,direction,draw){
+    var list=key==='presets'?getPresets():getQuickTimes(),target=index+direction;if(target<0||target>=list.length)return;
+    var item=list[index];list.splice(index,1);list.splice(target,0,item);
+    if(commitPreference(key,list))refreshManager(draw,target,direction);
+  }
+  function managerItem(index,title,subtitle,edit,remove){
+    var card=el('div','card manager-item'),body=el('div','grow');card.dataset.index=String(index);body.appendChild(el('b','',title));if(subtitle)body.appendChild(el('div','s',subtitle));
+    if(edit||remove){var actions=el('div','manager-actions');if(edit){var e=el('button','link','Editar');e.onclick=edit;actions.appendChild(e);}if(remove){var d=el('button','link manager-delete','Excluir');d.onclick=remove;actions.appendChild(d);}body.appendChild(actions);}
+    card.appendChild(body);return card;
+  }
+
   function managePresets(){
     var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Modelos de exames'));
     s.appendChild(el('p','note','Atalhos de seleção para o relatório. Revise os exames selecionados antes de compartilhar; os modelos podem ser personalizados.'));
-    getPresets().forEach(function(pr,index){var card=el('div','card');card.style.cursor='default';card.appendChild(el('b','',pr.name));card.appendChild(el('div','s',pr.keys?pr.keys.length+' tipo(s) de exame':'Mais recente de cada exame'));var row=el('div','row'),edit=el('button','sec','Editar'),del=el('button','del','Excluir');del.style.marginTop='0';edit.onclick=function(){editPreset(index);};del.onclick=function(){if(!confirm('Excluir o modelo '+pr.name+'?'))return;var list=getPresets();list.splice(index,1);if(commitPreference('presets',list))managePresets();};row.appendChild(edit);row.appendChild(del);card.appendChild(row);s.appendChild(card);});
+    var list=getPresets();list.forEach(function(pr,index){var card=managerItem(index,pr.name,pr.keys?pr.keys.length+' tipo(s) de exame':'Mais recente de cada exame',function(){editPreset(index);},function(){if(!confirm('Excluir o modelo '+pr.name+'?'))return;var current=getPresets();current.splice(index,1);if(commitPreference('presets',current))managePresets();});card.appendChild(managerArrows(index,list.length,pr.name,function(direction){preferenceMove('presets',index,direction,managePresets);}));s.appendChild(card);});
     var add=el('button','pri','+ Novo modelo');add.style.marginTop='10px';add.onclick=function(){editPreset(null);};s.appendChild(add);
     var restore=el('button','sec','Restaurar modelos padrão');restore.style.marginTop='10px';restore.onclick=function(){if(confirm('Substituir seus modelos pelos padrões?')&&commitPreference('presets',null))managePresets();};s.appendChild(restore);
     var back=el('button','sec','Voltar');back.style.marginTop='10px';back.onclick=managerBack;s.appendChild(back);showM();
@@ -1746,7 +1782,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   function manageQuickTimes(){
     var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Horários rápidos'));
     s.appendChild(el('p','note','Atalhos de preenchimento. Use os horários e orientações da receita; nenhum horário é aplicado automaticamente.'));
-    getQuickTimes().forEach(function(time,index){var card=el('div','card');card.style.cursor='default';card.appendChild(el('b','',time));var row=el('div','row');[['Subir',-1],['Descer',1]].forEach(function(a){var b=el('button','sec',a[0]);b.disabled=index+a[1]<0||index+a[1]>=getQuickTimes().length;b.onclick=function(){var list=getQuickTimes(),other=index+a[1],t=list[index];list[index]=list[other];list[other]=t;if(commitPreference('quickTimes',list))manageQuickTimes();};row.appendChild(b);});card.appendChild(row);var actions=el('div','row'),edit=el('button','sec','Editar'),del=el('button','del','Excluir');del.style.marginTop='0';edit.onclick=function(){editQuickTime(index);};del.onclick=function(){if(!confirm('Excluir o atalho '+time+'?'))return;var list=getQuickTimes();list.splice(index,1);if(commitPreference('quickTimes',list))manageQuickTimes();};actions.appendChild(edit);actions.appendChild(del);card.appendChild(actions);s.appendChild(card);});
+    var list=getQuickTimes();list.forEach(function(time,index){var card=managerItem(index,time,'',function(){editQuickTime(index);},function(){if(!confirm('Excluir o atalho '+time+'?'))return;var current=getQuickTimes();current.splice(index,1);if(commitPreference('quickTimes',current))manageQuickTimes();});card.appendChild(managerArrows(index,list.length,time,function(direction){preferenceMove('quickTimes',index,direction,manageQuickTimes);}));s.appendChild(card);});
     var add=el('button','pri','+ Novo atalho');add.style.marginTop='10px';add.onclick=function(){editQuickTime(null);};s.appendChild(add);var restore=el('button','sec','Restaurar horários padrão');restore.style.marginTop='10px';restore.onclick=function(){if(confirm('Substituir seus atalhos pelos padrões?')&&commitPreference('quickTimes',null))manageQuickTimes();};s.appendChild(restore);var back=el('button','sec','Voltar');back.style.marginTop='10px';back.onclick=managerBack;s.appendChild(back);showM();
   }
   function editQuickTime(index){
@@ -1763,12 +1799,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     if(m.history)lines.push('Ant. pess.: '+m.history);if(m.contact)lines.push('Contato de emergência: '+m.contact);if(m.blood)lines.push('Tipo sanguíneo informado: '+m.blood);
     if(m.wt)lines.push('Peso/altura: '+m.wt+(m.wtDate?' (registro: '+fd(m.wtDate)+')':' (data não informada)'));
     lines.push('','MEDICAMENTOS EM USO');var meds=db.d.filter(function(x){return x.mid===m.id&&x.st==='on';});meds.forEach(function(x){lines.push('- '+[x.n,x.dose,x.amount,x.f].filter(Boolean).join(' — '));});if(!meds.length)lines.push('- nenhum registrado');lines.push('','Gerado em '+new Date().toLocaleString('pt-BR'));
-    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Ficha de emergência'));var pre=el('pre','',lines.join('\n'));pre.style.fontSize='18px';s.appendChild(pre);var row=el('div','row'),copyButton=el('button','pri','Copiar texto'),close=el('button','sec','Fechar');copyButton.onclick=function(){copy(lines.join('\n'));};close.onclick=closeM;row.appendChild(copyButton);row.appendChild(close);s.appendChild(row);showM();
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Ficha de emergência'));var pre=el('pre','emergency-content',lines.join('\n'));pre.style.fontSize='18px';s.appendChild(pre);var row=el('div','row'),copyButton=el('button','pri','Copiar texto'),close=el('button','sec','Fechar');copyButton.onclick=function(){copy(lines.join('\n'));};close.onclick=closeM;row.appendChild(copyButton);row.appendChild(close);s.appendChild(row);showM();
   }
 
   function manageMembers(){
     var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Gerenciar familiares'));
-    db.m.forEach(function(m,i){var row=el('div','card');row.appendChild(el('b','',m.name));[-1,1].forEach(function(dir){var b=el('button','link',dir<0?'Subir':'Descer');b.disabled=dir<0?i===0:i===db.m.length-1;b.onclick=function(){moveMember(m,dir);manageMembers();};row.appendChild(b);});s.appendChild(row);});
+    db.m.forEach(function(m,i){var card=managerItem(i,m.name,'',null,null);card.appendChild(managerArrows(i,db.m.length,m.name,function(direction){if(moveMember(m,direction))refreshManager(manageMembers,i+direction,direction);}));s.appendChild(card);});
     var close=el('button','sec','Voltar');close.onclick=settings;s.appendChild(close);showM();
   }
   function render(){
@@ -1898,7 +1934,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     // ABA RESUMO
     if(tab === 'r'){
-      var emergency=el('button','sec screen-only','Ficha de emergência');emergency.style.marginBottom='8px';emergency.onclick=function(){emergencyCard(m);};p.appendChild(emergency);
+      var emergency=el('button','pri emergency-button screen-only','Ficha de emergência');emergency.style.marginBottom='8px';emergency.onclick=function(){emergencyCard(m);};p.appendChild(emergency);
       reportOptions(m,p);
       p.appendChild(el('pre','',summary(m)));
       
