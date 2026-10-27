@@ -460,15 +460,32 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .report-options>label{display:block;}
 @media(max-width:360px){.batch-values{grid-template-columns:minmax(0,1fr);}}
 @media print{.date-edit-list{display:none!important;}}
+.ic{font-size:15px;font-weight:600;}
+.input-wrap .sug{position:absolute;left:0;right:0;top:100%;z-index:30;}
+.sheet .card .row{position:static;padding:0;}
+.report-options,.batch-group,.date-edit-list{background:var(--card);}
+.report-status>span{display:block;margin:8px 0;}
+.report-presets{margin:12px 0;}
+.preset-list{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin:8px 0;}
+.check-line{display:flex!important;align-items:center;gap:10px;min-height:44px;}
+.check-line input{width:24px;height:24px;margin:0;flex:none;}
+.quick-times button[aria-pressed="true"]{background:var(--ac-soft);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac);}
+.quick-times .note{flex-basis:100%;}
+.update-alert{padding:12px;border:1px solid var(--ac);border-radius:12px;background:var(--ac-soft);margin:10px 0;}
+.update-alert button{margin-top:8px;}
+.preset-list label{font-weight:400;}
+@media(max-width:360px){.top{flex-wrap:wrap;gap:6px;}}
 </style>
 </head>
 <body>
 <main>
   <div class="top">
     <h1>🩺 Saúde da família</h1>
-    <button class="ic" id="cfg" aria-label="Backup e ajustes">⚙️</button>
+    <span id="net" class="note" role="status"></span>
+    <button class="ic" id="cfg" aria-label="Backup e ajustes">⚙️ Backup</button>
   </div>
   
+  <div id="updateAlert" class="update-alert screen-only" hidden></div>
   <div id="backupAlert"></div>
   
   <div class="chips-wrap">
@@ -478,7 +495,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   
   <div id="panel"></div>
   <p class="note">Os dados ficam salvos apenas neste aparelho, neste navegador. Faça backup de vez em quando (⚙️).</p>
-  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão 8.3</footer>
+  <footer class="note screen-only" style="text-align:center;margin:16px 0 8px" aria-label="Versão do aplicativo">Saúde da família · Versão <span id="appVersion"></span></footer>
 </main>
 
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Formulário" tabindex="-1"></div></div>
@@ -487,7 +504,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 <script>
 (function(){
   var KEY='saude_familia_v1', tab='d', q='', tt, selectedExamName='';
+  var APP_VERSION='8.11';
   var reportMode='dates', reportExcluded={}, modalDirty=false, previousFocus=null;
+  try{var reportStored=JSON.parse(localStorage.getItem(KEY+'_report')||'null');if(reportStored&&typeof reportStored==='object'){if(reportStored.mode==='dates'||reportStored.mode==='latest')reportMode=reportStored.mode;if(reportStored.excluded&&typeof reportStored.excluded==='object'&&!Array.isArray(reportStored.excluded)){Object.keys(reportStored.excluded).forEach(function(k){if(Array.isArray(reportStored.excluded[k]))reportExcluded[k]=reportStored.excluded[k].filter(function(id){return typeof id==='string';});});}}}catch(e){}
+  var reportStorageWarned=false;
+  function saveReportState(){try{localStorage.setItem(KEY+'_report',JSON.stringify({mode:reportMode,excluded:reportExcluded}));}catch(e){if(!reportStorageWarned){reportStorageWarned=true;toast('A seleção vale nesta sessão; não foi possível guardá-la neste aparelho.',5000);}}}
   var db=load();
   var base=JSON.parse(JSON.stringify(db));
 
@@ -508,6 +529,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     o.hiddenMeds=Array.isArray(o.hiddenMeds)?o.hiddenMeds.filter(isStr):[];
     o.customMeds=Array.isArray(o.customMeds)?o.customMeds.filter(isStr):[];
     if(!o.lastBackup)o.lastBackup=0;
+    if(!Array.isArray(o.presets))o.presets=null;
+    o.quickTimes=Array.isArray(o.quickTimes)?o.quickTimes.filter(isStr):null;
     if(!o.m.some(function(x){return x.id===o.sel;}))o.sel=o.m.length?o.m[0].id:null;
     return o;
   }
@@ -570,6 +593,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
           db.m = mergeList(base.m, db.m, st.m); db.d = mergeList(base.d, db.d, st.d); db.x = mergeList(base.x, db.x, st.x);
           db.customMeds = mergeStr(base.customMeds || [], db.customMeds || [], Array.isArray(st.customMeds) ? st.customMeds : []);
           db.hiddenMeds = mergeStr(base.hiddenMeds || [], db.hiddenMeds || [], Array.isArray(st.hiddenMeds) ? st.hiddenMeds : []);
+          ['presets','quickTimes'].forEach(function(k){if(JSON.stringify(db[k]||null)===JSON.stringify(base[k]||null))db[k]=st[k]===undefined?null:clone(st[k]);});
           db.lastBackup = Math.max(db.lastBackup || 0, st.lastBackup || 0);
           if(!db.m.some(function(x){ return x.id === db.sel; })) db.sel = db.m.length ? db.m[0].id : null;
           merged = true;
@@ -708,14 +732,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   /* Exportação: escolha de quem entra no arquivo (dados dos não marcados não saem do aparelho) */
   function exportable(ids){
-    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion="8.3";return full;}
+    if(ids.length===db.m.length){var full=clone(db);full.backupCreatedAt=new Date().toISOString();full.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;full.backupVersion=APP_VERSION;return full;}
     var o={schema:2,rev:0,parcial:true,sel:ids[0],lastBackup:0,fs:db.fs||1,hiddenMeds:[],
       m:db.m.filter(function(x){return ids.indexOf(x.id)>=0;}),
       d:db.d.filter(function(x){return ids.indexOf(x.mid)>=0;}),
       x:db.x.filter(function(x){return ids.indexOf(x.mid)>=0;})};
     var used={};o.d.forEach(function(x){used[norm(x.n)]=1;});
     o.customMeds=(db.customMeds||[]).filter(function(n){return used[norm(n)];});
-    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion="8.3";return o;
+    o.backupCreatedAt=new Date().toISOString();o.backupTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;o.backupVersion=APP_VERSION;return o;
   }
   function chooseMembers(titulo, cb){
     if(db.m.length<2){ cb(db.m.map(function(x){return x.id;})); return; }
@@ -753,6 +777,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
       ins[f.k]=i;l.appendChild(i);s.appendChild(l);
     });
     if(hook)hook(ins);
+    if(ins.blood&&ins.wt){var extra=el('details','more-details');extra.appendChild(el('summary','','Mais informações'));['blood','wt','wtDate'].forEach(function(k){if(ins[k]){if(ins[k].value)extra.open=true;extra.appendChild(ins[k].closest('label'));}});s.appendChild(extra);}
     if(ins.doc&&ins.spec){var more=el('details','more-details');more.appendChild(el('summary','','Mais detalhes'));['doc','spec','s','o'].forEach(function(k){if(ins[k]){if(ins[k].value)more.open=true;more.appendChild(ins[k].closest('label'));}});s.appendChild(more);}
     var err=el('div','err');s.appendChild(err);
     var row=el('div','row'),c=el('button','sec','Cancelar'),ok=el('button','pri','Salvar');
@@ -780,10 +805,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
   function editMember(m){
     form(m?'Editar familiar':'Novo familiar',
-      [{k:'name',l:'Nome',req:1,p:'Ex.: Mãe'},{k:'history',l:'Antecedentes pessoais e observações importantes (opcional)',t:'area',p:'Ex.: Doença de Parkinson, HAS, DM2'},{k:'o',l:'Alergia(s)',t:'area',p:'Ex.: alergia a dipirona'}],
+      [{k:'name',l:'Nome',req:1,p:'Ex.: Mãe'},{k:'history',l:'Antecedentes pessoais e observações importantes (opcional)',t:'area',p:'Ex.: Doença de Parkinson, HAS, DM2'},{k:'o',l:'Alergia(s)',t:'area',p:'Ex.: alergia a dipirona'},{k:'contact',l:'Contato de emergência (opcional)',p:'Nome e telefone'},{k:'blood',l:'Tipo sanguíneo informado (opcional)'},{k:'wt',l:'Peso / altura (opcional)',p:'Ex.: 70 kg · 1,65 m'},{k:'wtDate',l:'Data do registro de peso / altura (opcional)',t:'date'}],
       m,function(o){
-        if(m){m.name=o.name;m.o=o.o;m.history=o.history;}
-        else{var n={id:uid(),name:o.name,o:o.o,history:o.history};db.m.push(n);db.sel=n.id;tab='d';}
+        if(o.wt&&(!o.wtDate||(m&&o.wt!==m.wt&&o.wtDate===m.wtDate)))o.wtDate=today();
+        if(!o.wt)o.wtDate='';
+        if(m){for(var k in o)m[k]=o[k];}
+        else{var n=Object.assign({id:uid()},o);db.m.push(n);db.sel=n.id;tab='d';}
       },
       m?function(){
         db.d=db.d.filter(function(x){return x.mid!==m.id;});
@@ -1188,7 +1215,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
         else{ o.id = uid(); o.mid = m.id; db.d.push(o); }
       },
       x ? function(){ db.d = db.d.filter(function(y){ return y !== x; }); } : null,
-      undefined, medHook
+      undefined, function(ins){medHook(ins);attachQuickTimes(ins);}
     );
   }
 
@@ -1301,12 +1328,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   function reportOptions(m,p){
     var all=db.x.filter(function(x){return x.mid===m.id;}).slice().sort(byDate),excluded=reportExcluded[m.id]||[];
     var details=el('details','report-options');details.appendChild(el('summary','','Selecionar datas e exames do relatório'));
-    details.appendChild(el('p','note','Desmarcar uma data retira todos os exames daquele dia do relatório. Abra a data para escolher exames individualmente. A seleção vale nesta sessão e não apaga o histórico.'));
+    details.appendChild(el('p','note','Desmarcar uma data retira todos os exames daquele dia do relatório. Abra a data para escolher exames individualmente. A seleção fica guardada neste aparelho e não apaga o histórico. Revise os filtros antes de compartilhar.'));
     var modeLabel=el('label','','Apresentação'),mode=el('select');[['dates','Por data'],['latest','Mais recente de cada exame']].forEach(function(a){var option=el('option','',a[1]);option.value=a[0];mode.appendChild(option);});mode.value=reportMode;mode.id='report-presentation';modeLabel.htmlFor=mode.id;details.appendChild(modeLabel);details.appendChild(mode);
-    var controls=el('div','row'),checks=[],dates=[],status=el('div','report-status');status.setAttribute('aria-live','polite');
-    function update(){reportExcluded[m.id]=checks.filter(function(a){return !a.input.checked;}).map(function(a){return a.id;});dates.forEach(function(d){var n=d.children.filter(function(c){return c.input.checked;}).length;d.input.checked=n===d.children.length;d.input.indeterminate=n>0&&n<d.children.length;d.count.textContent=n+'/'+d.children.length;});var pre=p.querySelector('pre');if(pre)pre.textContent=summary(m);status.textContent=(all.length-reportExcluded[m.id].length)+' de '+all.length+' resultados selecionados · '+reportExams(m).length+' no relatório';}
+    var controls=el('div','row'),checks=[],dates=[],status=el('div','report-status'),statusText=el('span'),reset=el('button','sec','Mostrar todos os resultados');status.appendChild(statusText);status.appendChild(reset);status.setAttribute('aria-live','polite');
+    function update(){reportExcluded[m.id]=checks.filter(function(a){return !a.input.checked;}).map(function(a){return a.id;});dates.forEach(function(d){var n=d.children.filter(function(c){return c.input.checked;}).length;d.input.checked=n===d.children.length;d.input.indeterminate=n>0&&n<d.children.length;d.count.textContent=n+'/'+d.children.length;});var pre=p.querySelector('pre');if(pre)pre.textContent=summary(m);var visible=reportExams(m).length;statusText.textContent=visible+' de '+all.length+' resultados no relatório'+(visible<all.length?' · '+(all.length-visible)+' oculto(s) por seleção ou modo recente':'');reset.hidden=visible===all.length;saveReportState();}
+    reset.onclick=function(){checks.forEach(function(c){c.input.checked=true;});reportMode='dates';mode.value='dates';update();};
     mode.onchange=function(){reportMode=mode.value;update();};
     [['Marcar todos',true],['Desmarcar todos',false]].forEach(function(a){var b=el('button','sec',a[0]);b.onclick=function(){checks.forEach(function(c){c.input.checked=a[1];});update();};controls.appendChild(b);});details.appendChild(controls);
+    var presetsBox=el('details','report-presets');presetsBox.appendChild(el('summary','','Usar um modelo de seleção'));presetsBox.appendChild(el('p','note','Atalhos personalizáveis. Confira a seleção antes de compartilhar.'));var presetRow=el('div','row');
+    var records={};all.forEach(function(x){records[x.id]=x;});
+    getPresets().forEach(function(pr){var b=el('button','sec',pr.name);b.onclick=function(){reportMode=pr.keys===null?'latest':'dates';mode.value=reportMode;checks.forEach(function(c){c.input.checked=pr.keys===null||pr.keys.indexOf(presetKey(examIdentity(records[c.id])))>=0;});update();};presetRow.appendChild(b);});presetsBox.appendChild(presetRow);details.appendChild(presetsBox);
     Array.from(new Set(all.map(function(x){return x.dt;}))).sort().reverse().forEach(function(date){
       var group=el('div','report-date'),header=el('div','report-date-header'),lab=el('label'),master=el('input');master.type='checkbox';master.setAttribute('aria-label','Todos os exames de '+fd(date));lab.appendChild(master);lab.appendChild(el('b','',fd(date)));header.appendChild(lab);
       var count=el('span','note'),expand=el('details');expand.appendChild(el('summary','','Escolher exames'));group.appendChild(header);header.appendChild(count);group.appendChild(expand);details.appendChild(group);var dateState={input:master,children:[],count:count};dates.push(dateState);
@@ -1366,6 +1397,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     var L = ['FAMILIAR: ' + m.name];
     if(m.history) L.push('Ant. pess.: ' + m.history);
     if(m.o) L.push('Alergia(s): ' + m.o);
+    if(m.contact)L.push('Contato de emergência: '+m.contact);
+    if(m.blood)L.push('Tipo sanguíneo informado: '+m.blood);
+    if(m.wt)L.push('Peso/altura: '+m.wt+(m.wtDate?' (registro: '+fd(m.wtDate)+')':' (data não informada)'));
     L.push('', 'MEDICAMENTOS EM USO');
     var on = db.d.filter(function(x){ return x.mid === m.id && x.st === 'on'; });
     if(!on.length) L.push('- nenhum registrado');
@@ -1480,9 +1514,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     var last = db.lastBackup || 0;
     var days = (Date.now() - last) / (1000 * 60 * 60 * 24);
     
-    if(db.m.length && (!last || days > 30)){
+    if(db.m.length && (!last || days > 14)){
       var warn = el('div', 'backup-alert');
-      warn.appendChild(el('span', '', !last?'Nenhum backup exportado ainda.':'Faz mais de 30 dias que não exporta um backup.'));
+      warn.appendChild(el('span', '', !last?'Nenhum backup exportado ainda.':'Faz mais de 14 dias que não exporta um backup.'));
       var b = el('button', '', 'Fazer backup');
       b.onclick = settings;
       warn.appendChild(b);
@@ -1646,6 +1680,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     s.appendChild(el('p','note','O backup é um arquivo de texto com dados de saúde, sem senha. Guarde em local seguro.'));
     var bm = el('button','sec','✏️ Gerenciar sugestões de remédios'); bm.style.marginTop = '10px'; bm.onclick = manageMeds; s.appendChild(bm);
+    [['Gerenciar modelos de exames',managePresets],['Gerenciar horários rápidos',manageQuickTimes]].forEach(function(a){var b=el('button','sec',a[0]);b.style.marginTop='10px';b.onclick=a[1];s.appendChild(b);});
     var secRec = el('div'); secRec.appendChild(el('h3','','Recuperar cópias neste aparelho')); var anyRec = false;
     [['_antes_restauro','Antes da última restauração'],['_snap1','Cópia automática mais recente'],['_snap2','Cópia automática anterior']].forEach(function(c){
       var o = null; try{ var raw = localStorage.getItem(KEY + c[0]); o = raw ? JSON.parse(raw) : null; }catch(e){}
@@ -1669,6 +1704,66 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     s.appendChild(rowClose);
 
     showM();
+  }
+
+  var DEFAULT_PRESETS=[
+    {name:'Cardiologia',keys:['Colesterol total','LDL','HDL','Triglicerídeos','Creatinina','TFG','Ureia','Sódio','Potássio','Glicemia de jejum','Hemoglobina glicada (HbA1c)','Pressão arterial']},
+    {name:'Endocrinologia',keys:['Hemoglobina glicada (HbA1c)','Glicemia de jejum','TSH','T4 livre','Vitamina D (25-OH)','Colesterol total','LDL','Triglicerídeos','Creatinina','TFG','Albuminúria']},
+    {name:'Urgência',keys:['Hemoglobina','Hematócrito','Leucócitos','Plaquetas','Creatinina','TFG','Ureia','Sódio','Potássio','Glicemia de jejum','TGO (AST)','TGP (ALT)','Albumina']},
+    {name:'Só os mais recentes',keys:null}
+  ];
+  var DEFAULT_TIMES=['8h','12h','20h','antes das refeições','antes de dormir','em jejum'];
+  function presetKey(n){var d=examDef(n);return norm(d?d.name:n);}
+  function cleanPresets(list){
+    if(!Array.isArray(list))return null;
+    return list.filter(function(p){return p&&typeof p.name==='string'&&p.name.trim()&&(p.keys===null||Array.isArray(p.keys));}).map(function(p){return {name:p.name.trim(),keys:p.keys===null?null:Array.from(new Set(p.keys.filter(isStr).map(function(k){return presetKey(k==='creatina'?'Creatinina':k);}))) };});
+  }
+  function getPresets(){return cleanPresets(db.presets)||cleanPresets(DEFAULT_PRESETS);}
+  function getQuickTimes(){return Array.isArray(db.quickTimes)?db.quickTimes.filter(isStr):DEFAULT_TIMES.slice();}
+  function commitPreference(key,value){var before=captureDb();db[key]=value;if(!save()){rollbackDb(before);return false;}return true;}
+  function managerBack(){modalDirty=false;closeM();render();}
+  function managePresets(){
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Modelos de exames'));
+    s.appendChild(el('p','note','Atalhos de seleção para o relatório. Revise os exames selecionados antes de compartilhar; os modelos podem ser personalizados.'));
+    getPresets().forEach(function(pr,index){var card=el('div','card');card.style.cursor='default';card.appendChild(el('b','',pr.name));card.appendChild(el('div','s',pr.keys?pr.keys.length+' tipo(s) de exame':'Mais recente de cada exame'));var row=el('div','row'),edit=el('button','sec','Editar'),del=el('button','del','Excluir');del.style.marginTop='0';edit.onclick=function(){editPreset(index);};del.onclick=function(){if(!confirm('Excluir o modelo '+pr.name+'?'))return;var list=getPresets();list.splice(index,1);if(commitPreference('presets',list))managePresets();};row.appendChild(edit);row.appendChild(del);card.appendChild(row);s.appendChild(card);});
+    var add=el('button','pri','+ Novo modelo');add.style.marginTop='10px';add.onclick=function(){editPreset(null);};s.appendChild(add);
+    var restore=el('button','sec','Restaurar modelos padrão');restore.style.marginTop='10px';restore.onclick=function(){if(confirm('Substituir seus modelos pelos padrões?')&&commitPreference('presets',null))managePresets();};s.appendChild(restore);
+    var back=el('button','sec','Voltar');back.style.marginTop='10px';back.onclick=managerBack;s.appendChild(back);showM();
+  }
+  function editPreset(index){
+    var original=index===null?null:getPresets()[index],draft=original?clone(original):{name:'',keys:[]},s=$('sheet');s.innerHTML='';s.appendChild(el('h2','',original?'Editar modelo':'Novo modelo'));
+    var lab=el('label','','Nome do modelo *'),name=el('input');name.value=draft.name;lab.appendChild(name);s.appendChild(lab);
+    var specialLab=el('label','check-line'),special=el('input');special.type='checkbox';special.checked=draft.keys===null;specialLab.appendChild(special);specialLab.appendChild(el('span','','Mostrar só o mais recente de cada exame'));s.appendChild(specialLab);
+    var filterLab=el('label','','Buscar exame'),filter=el('input');filter.placeholder='Nome ou sigla';filterLab.appendChild(filter);s.appendChild(filterLab);
+    var box=el('div','preset-list');s.appendChild(box);var checked=new Set(draft.keys||[]),names=[],seen=new Set();
+    examNames().forEach(function(n){var key=presetKey(n);if(!seen.has(key)){seen.add(key);names.push(n);}});
+    function draw(){box.innerHTML='';var q=norm(filter.value);names.forEach(function(n){var d=examDef(n),code=d?d.code:'';if(q&&norm(n+' '+code).indexOf(q)<0)return;var row=el('label','check-line'),c=el('input');c.type='checkbox';c.checked=checked.has(presetKey(n));c.onchange=function(){if(c.checked)checked.add(presetKey(n));else checked.delete(presetKey(n));modalDirty=true;};row.appendChild(c);row.appendChild(el('span','',code?code+' — '+n:n));box.appendChild(row);});box.hidden=special.checked;filterLab.hidden=special.checked;}
+    filter.oninput=function(e){e.stopPropagation();draw();};special.onchange=function(){modalDirty=true;draw();};draw();
+    var error=el('div','err');error.setAttribute('role','alert');s.appendChild(error);var actions=el('div','row'),cancel=el('button','sec','Cancelar'),ok=el('button','pri','Salvar');
+    cancel.onclick=function(){if(modalDirty&&!confirm('Descartar as alterações deste modelo?'))return;modalDirty=false;managePresets();};
+    ok.onclick=function(){var n=name.value.trim();if(!n){error.textContent='Informe o nome do modelo.';name.focus();return;}var list=getPresets();if(list.some(function(p,i){return i!==index&&norm(p.name)===norm(n);})){error.textContent='Já existe um modelo com esse nome.';return;}if(!special.checked&&!checked.size){error.textContent='Selecione pelo menos um exame.';return;}var value={name:n,keys:special.checked?null:Array.from(checked)};if(index===null)list.push(value);else list[index]=value;if(!commitPreference('presets',list))return;modalDirty=false;managePresets();toast('Modelo salvo.');};actions.appendChild(cancel);actions.appendChild(ok);s.appendChild(actions);showM();
+  }
+  function manageQuickTimes(){
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Horários rápidos'));
+    s.appendChild(el('p','note','Atalhos de preenchimento. Use os horários e orientações da receita; nenhum horário é aplicado automaticamente.'));
+    getQuickTimes().forEach(function(time,index){var card=el('div','card');card.style.cursor='default';card.appendChild(el('b','',time));var row=el('div','row');[['Subir',-1],['Descer',1]].forEach(function(a){var b=el('button','sec',a[0]);b.disabled=index+a[1]<0||index+a[1]>=getQuickTimes().length;b.onclick=function(){var list=getQuickTimes(),other=index+a[1],t=list[index];list[index]=list[other];list[other]=t;if(commitPreference('quickTimes',list))manageQuickTimes();};row.appendChild(b);});card.appendChild(row);var actions=el('div','row'),edit=el('button','sec','Editar'),del=el('button','del','Excluir');del.style.marginTop='0';edit.onclick=function(){editQuickTime(index);};del.onclick=function(){if(!confirm('Excluir o atalho '+time+'?'))return;var list=getQuickTimes();list.splice(index,1);if(commitPreference('quickTimes',list))manageQuickTimes();};actions.appendChild(edit);actions.appendChild(del);card.appendChild(actions);s.appendChild(card);});
+    var add=el('button','pri','+ Novo atalho');add.style.marginTop='10px';add.onclick=function(){editQuickTime(null);};s.appendChild(add);var restore=el('button','sec','Restaurar horários padrão');restore.style.marginTop='10px';restore.onclick=function(){if(confirm('Substituir seus atalhos pelos padrões?')&&commitPreference('quickTimes',null))manageQuickTimes();};s.appendChild(restore);var back=el('button','sec','Voltar');back.style.marginTop='10px';back.onclick=managerBack;s.appendChild(back);showM();
+  }
+  function editQuickTime(index){
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','',index===null?'Novo atalho':'Editar atalho'));var label=el('label','','Horário / orientação *'),input=el('input');input.value=index===null?'':getQuickTimes()[index];label.appendChild(input);s.appendChild(label);var error=el('div','err');error.setAttribute('role','alert');s.appendChild(error);var row=el('div','row'),cancel=el('button','sec','Cancelar'),ok=el('button','pri','Salvar');cancel.onclick=function(){if(modalDirty&&!confirm('Descartar as alterações deste atalho?'))return;modalDirty=false;manageQuickTimes();};ok.onclick=function(){var value=input.value.trim(),list=getQuickTimes();if(!value){error.textContent='Informe o texto do atalho.';return;}if(list.some(function(t,i){return i!==index&&norm(t)===norm(value);})){error.textContent='Já existe um atalho com esse texto.';return;}if(index===null)list.push(value);else list[index]=value;if(!commitPreference('quickTimes',list))return;modalDirty=false;manageQuickTimes();};row.appendChild(cancel);row.appendChild(ok);s.appendChild(row);showM();
+  }
+  function attachQuickTimes(ins){
+    var input=ins.f;if(!input)return;var wrap=el('div','pres quick-times'),times=getQuickTimes();
+    function parts(){return input.value.split(/[,;·]/).map(function(t){return t.trim();}).filter(Boolean);}
+    times.forEach(function(time){var button=el('button','',time);button.type='button';function refresh(){button.setAttribute('aria-pressed',String(parts().some(function(p){return norm(p)===norm(time);})));}button.onclick=function(e){e.preventDefault();input.focus();var list=parts(),present=list.some(function(p){return norm(p)===norm(time);});input.value=present?list.filter(function(p){return norm(p)!==norm(time);}).join(', '):input.value.trim()+(input.value.trim()?', ':'')+time;modalDirty=true;input.dispatchEvent(new Event('input',{bubbles:true}));};input.addEventListener('input',refresh);refresh();wrap.appendChild(button);});
+    if(times.length){wrap.appendChild(el('div','note','Atalhos — confira os horários da receita.'));input.closest('label').after(wrap);}
+  }
+  function emergencyCard(m){
+    var lines=['FICHA DE EMERGÊNCIA — '+m.name,'Alergia(s): '+(m.o||'não informada(s)')];
+    if(m.history)lines.push('Ant. pess.: '+m.history);if(m.contact)lines.push('Contato de emergência: '+m.contact);if(m.blood)lines.push('Tipo sanguíneo informado: '+m.blood);
+    if(m.wt)lines.push('Peso/altura: '+m.wt+(m.wtDate?' (registro: '+fd(m.wtDate)+')':' (data não informada)'));
+    lines.push('','MEDICAMENTOS EM USO');var meds=db.d.filter(function(x){return x.mid===m.id&&x.st==='on';});meds.forEach(function(x){lines.push('- '+[x.n,x.dose,x.amount,x.f].filter(Boolean).join(' — '));});if(!meds.length)lines.push('- nenhum registrado');lines.push('','Gerado em '+new Date().toLocaleString('pt-BR'));
+    var s=$('sheet');s.innerHTML='';s.appendChild(el('h2','','Ficha de emergência'));var pre=el('pre','',lines.join('\n'));pre.style.fontSize='18px';s.appendChild(pre);var row=el('div','row'),copyButton=el('button','pri','Copiar texto'),close=el('button','sec','Fechar');copyButton.onclick=function(){copy(lines.join('\n'));};close.onclick=closeM;row.appendChild(copyButton);row.appendChild(close);s.appendChild(row);showM();
   }
 
   function manageMembers(){
@@ -1803,6 +1898,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
     // ABA RESUMO
     if(tab === 'r'){
+      var emergency=el('button','sec screen-only','Ficha de emergência');emergency.style.marginBottom='8px';emergency.onclick=function(){emergencyCard(m);};p.appendChild(emergency);
       reportOptions(m,p);
       p.appendChild(el('pre','',summary(m)));
       
@@ -1847,14 +1943,34 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){}
   if(startMsg) setTimeout(function(){ alert(startMsg); }, 300);
 
-  // Registro do Service Worker para suporte a PWA Offline
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('./sw.js').catch(function(err){
-        console.log('Falha ao registrar ServiceWorker:', err);
-      });
+  $('appVersion').textContent=APP_VERSION;
+  function updateNetState(){$('net').textContent=navigator.onLine?'':'Sem conexão';}
+  window.addEventListener('online',updateNetState);window.addEventListener('offline',updateNetState);updateNetState();
+  if('serviceWorker' in navigator){
+    var waitingWorker=null,updateRequested=false,controllerChanged=false,reloadStarted=false,hadController=!!navigator.serviceWorker.controller;
+    function reloadApp(){if(reloadStarted)return;reloadStarted=true;location.reload();}
+    function showUpdate(){
+      var box=$('updateAlert');box.hidden=false;box.innerHTML='';box.appendChild(el('div','',controllerChanged?'Nova versão pronta. Recarregue quando terminar o preenchimento.':'Nova versão disponível. Atualize quando terminar o preenchimento.'));
+      var button=el('button','sec',controllerChanged?'Recarregar aplicativo':'Atualizar aplicativo');button.onclick=function(){
+        if(modalDirty){toast('Salve ou cancele as alterações do formulário antes de atualizar.',5000);return;}
+        updateRequested=true;if(controllerChanged){reloadApp();return;}if(waitingWorker)waitingWorker.postMessage({action:'skipWaiting'});
+      };box.appendChild(button);
+    }
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(!hadController){hadController=true;return;}
+      // A primeira instalação não precisa recarregar a página.
+
+      controllerChanged=true;if(updateRequested&&!modalDirty)reloadApp();else showUpdate();
+    });
+    window.addEventListener('load',function(){
+      var wasControlled=!!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('./sw.js').then(function(reg){
+        if(reg.waiting){waitingWorker=reg.waiting;showUpdate();}
+        reg.addEventListener('updatefound',function(){var worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',function(){if(worker.state==='installed'&&(wasControlled||navigator.serviceWorker.controller)){waitingWorker=reg.waiting||worker;showUpdate();}});});
+      }).catch(function(e){console.log('Não foi possível preparar o uso offline:',e);});
     });
   }
+
 })();
 </script>
 </body>
